@@ -1,0 +1,13 @@
+# Изолированный HH-прокси. Ничего чужого на сервере не трогает.
+# Поднять:  docker compose up -d      Снести:  docker compose down
+services:
+  hh-proxy:
+    image: caddy:2-alpine
+    container_name: hh-proxy
+    restart: unless-stopped
+    ports:
+      - "${HH_PROXY_PORT:-8088}:8088"
+    environment:
+      HH_PROXY_KEY: "${HH_PROXY_KEY:?set HH_PROXY_KEY in proxy/.env}"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro

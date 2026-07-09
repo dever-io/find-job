@@ -31,6 +31,8 @@ export const config = {
   hhApiBase: (env.HH_API_BASE ?? "https://api.hh.ru").replace(/\/+$/, ""),
   // HH рекомендует UA формата "AppName/version (contact-email)".
   hhUserAgent: env.HH_USER_AGENT ?? "StarJobs/0.1 (starjobs-bot@example.com)",
+  // Секрет для реверс-прокси HH (заголовок X-Proxy-Key). Пусто = ходим напрямую.
+  hhProxyKey: env.HH_PROXY_KEY ?? "",
 
   cronExpr: env.CRON_EXPR ?? "0 9 * * *",
   cronTz: env.CRON_TZ ?? "Europe/Moscow",

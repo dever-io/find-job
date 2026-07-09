@@ -2,7 +2,11 @@ import { fetchJson, type JobSource } from "./base.js";
 import { config } from "../config.js";
 import type { Vacancy } from "../types.js";
 
-const HH_HEADERS = { "User-Agent": config.hhUserAgent };
+const HH_HEADERS: Record<string, string> = {
+  "User-Agent": config.hhUserAgent,
+  // при работе через RU-прокси шлём секрет, иначе прокси ответит 403
+  ...(config.hhProxyKey ? { "X-Proxy-Key": config.hhProxyKey } : {}),
+};
 
 function stripHl(s: string): string {
   return s.replace(/<\/?highlighttext>/g, "");

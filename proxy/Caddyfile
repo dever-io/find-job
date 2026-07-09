@@ -1,0 +1,14 @@
+{
+	admin off
+}
+
+# Реверс-прокси ТОЛЬКО на api.hh.ru. Не открытый прокси: пропускает лишь
+# запросы с корректным заголовком X-Proxy-Key (значение — из env HH_PROXY_KEY).
+:8088 {
+	@denied not header X-Proxy-Key {$HH_PROXY_KEY}
+	respond @denied "forbidden" 403
+
+	reverse_proxy https://api.hh.ru {
+		header_up Host api.hh.ru
+	}
+}
