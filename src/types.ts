@@ -1,12 +1,11 @@
-import type { Plan } from "./config.js";
-
-export type { Plan };
-
 export type Experience = "noExperience" | "between1And3" | "between3And6" | "moreThan6";
 export type Schedule = "any" | "remote" | "fullDay" | "flexible";
 export type Employment = "any" | "full" | "part" | "project";
 
-/** Что ищет пользователь — набор фильтров. */
+/** Идентификатор трека поиска. */
+export type TrackId = "A" | "B";
+
+/** Что ищет трек — набор фильтров для источников. */
 export interface SearchQuery {
   keywords: string;
   areaId: string; // id региона в справочнике hh.ru ("113" = Россия)
@@ -16,6 +15,28 @@ export interface SearchQuery {
   schedule?: Schedule;
   employment?: Employment;
   extra?: string; // свободные пожелания для ИИ
+}
+
+/** Веса факторов скоринга (сумма ≈ 100). Разные для треков (spec §7). */
+export interface ScoreWeights {
+  experience: number;
+  skills: number;
+  salary: number;
+  schedule: number;
+  industry: number;
+  requirements: number;
+}
+
+/** Конфиг одного трека поиска. */
+export interface TrackConfig {
+  id: TrackId;
+  title: string;
+  query: SearchQuery;
+  weights: ScoreWeights;
+  /** Базовый текст резюме под трек (для писем и скоринга). */
+  resumeProfile: string;
+  /** Карта переноса опыта / доп. инструкции для LLM (актуально для трека B). */
+  transferPrompt?: string;
 }
 
 /** Нормализованная вакансия из любого источника. */
@@ -31,9 +52,10 @@ export interface Vacancy {
   url: string;
   publishedAt?: string; // ISO
   snippet?: string;
+  description?: string; // полное описание (добор через detail-endpoint)
 }
 
-/** Вердикт ИИ (или эвристики) о соответствии вакансии запросу. */
+/** Вердикт ИИ (или эвристики) о соответствии вакансии треку. */
 export interface VerifyResult {
   vacancyId: string;
   relevant: boolean;
@@ -42,36 +64,29 @@ export interface VerifyResult {
   model: string;
 }
 
-export interface SubscriptionState {
-  plan: Plan;
-  active: boolean;
-  isRecurring: boolean; // включено ли автопродление
-  expiresAt?: number; // unix seconds (subscription_expiration_date)
-  chargeId?: string; // telegram_payment_charge_id (для отмены/возврата)
-  startedAt?: string;
-}
+/** Статусы вакансии/отклика в воронке. */
+export type Status =
+  | "Viewed"
+  | "Saved"
+  | "Ignored"
+  | "Responded"
+  | "Interview"
+  | "Offer"
+  | "Rejected";
 
-export interface UserRecord {
-  id: number;
-  chatId: number;
-  username?: string;
-  firstName?: string;
+/** Вакансия, прошедшая пайплайн и сохранённая в истории. */
+export interface StoredVacancy {
+  id: string;
+  track: TrackId;
+  vacancy: Vacancy;
+  verdict: VerifyResult;
+  status: Status;
+  hot: boolean;
+  cardMessageId?: number; // id сообщения-карточки для обновления по кнопкам
   createdAt: string;
-  query?: SearchQuery;
-  subscription: SubscriptionState;
-  seenVacancyIds: string[]; // дедуп: что уже отправляли
-  lastDeliveryDate?: string; // YYYY-MM-DD последней дневной выдачи
-  lastPreviewAt?: string;
 }
 
-/** Шаги визарда, требующие текстового ввода (остальные — на кнопках). */
-export type WizardStep = "idle" | "keywords" | "area_custom" | "extra";
-
+/** Сессия grammY: держит состояние диалога (правка письма и т.п.). */
 export interface Session {
-  step: WizardStep;
-  draft: Partial<SearchQuery>;
-}
-
-export function defaultSubscription(): SubscriptionState {
-  return { plan: "basic", active: false, isRecurring: false };
+  awaiting?: { kind: "letter_edit"; vacancyId: string };
 }

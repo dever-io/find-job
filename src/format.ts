@@ -1,4 +1,4 @@
-import type { Vacancy, VerifyResult, SearchQuery } from "./types.js";
+import type { Vacancy, VerifyResult, TrackId } from "./types.js";
 
 /** Экранирование для parse_mode: "HTML" (& первым!). */
 export function escapeHtml(s: string): string {
@@ -36,9 +36,30 @@ const SRC_LABEL: Record<string, string> = {
   trudvsem: "Работа России",
 };
 
+const STATUS_LABEL: Record<string, string> = {
+  Saved: "⭐ Сохранено",
+  Ignored: "❌ Не интересно",
+  Responded: "✅ Отклик отправлен",
+  Interview: "🗣 Собеседование",
+  Offer: "🎉 Оффер",
+  Rejected: "🚫 Отказ",
+};
+
+export interface CardOpts {
+  track?: TrackId;
+  hot?: boolean;
+  statusLine?: string; // напр. итоговый статус после нажатия кнопки
+}
+
 /** Карточка вакансии в HTML. */
-export function vacancyCard(v: Vacancy, verdict?: VerifyResult): string {
-  const lines: string[] = [`<b>${escapeHtml(v.title)}</b>`];
+export function vacancyCard(v: Vacancy, verdict?: VerifyResult, opts: CardOpts = {}): string {
+  const head: string[] = [];
+  if (opts.track) head.push(`[Track ${opts.track}]`);
+  if (opts.hot) head.push("🔥 Горячая");
+  const lines: string[] = [];
+  if (head.length) lines.push(`<i>${head.join("  ")}</i>`);
+  lines.push(`<b>${escapeHtml(v.title)}</b>`);
+
   const meta: string[] = [];
   if (v.company) meta.push("🏢 " + escapeHtml(v.company));
   if (v.area) meta.push("📍 " + escapeHtml(v.area));
@@ -48,32 +69,10 @@ export function vacancyCard(v: Vacancy, verdict?: VerifyResult): string {
     lines.push(`${scoreEmoji(verdict.score)} <b>${verdict.score}/100</b> — ${escapeHtml(verdict.reason)}`);
   }
   lines.push(`<i>Источник: ${escapeHtml(SRC_LABEL[v.source] ?? v.source)}</i>`);
+  if (opts.statusLine) lines.push(`\n${opts.statusLine}`);
   return lines.join("\n");
 }
 
-const EXP_LABEL: Record<string, string> = {
-  noExperience: "без опыта",
-  between1And3: "1–3 года",
-  between3And6: "3–6 лет",
-  moreThan6: "6+ лет",
-};
-
-const SCH_LABEL: Record<string, string> = {
-  remote: "удалёнка",
-  fullDay: "офис",
-  flexible: "гибкий график",
-};
-
-/** Человекочитаемое резюме фильтров. */
-export function querySummary(q: SearchQuery): string {
-  const parts = [
-    "✅ <b>Фильтры сохранены</b>",
-    `💼 ${escapeHtml(q.keywords)}`,
-    `📍 ${escapeHtml(q.areaName)}`,
-    q.salaryFrom ? `💰 от ${q.salaryFrom.toLocaleString("ru-RU")} ₽` : "💰 зарплата любая",
-  ];
-  if (q.experience) parts.push(`🎓 ${EXP_LABEL[q.experience]}`);
-  if (q.schedule) parts.push(`🗓 ${SCH_LABEL[q.schedule]}`);
-  if (q.extra) parts.push(`✨ ${escapeHtml(q.extra)}`);
-  return parts.join("\n");
+export function statusLabel(status: string): string {
+  return STATUS_LABEL[status] ?? status;
 }

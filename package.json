@@ -1,11 +1,10 @@
 {
-  "name": "telegram-jobs-bot",
-  "version": "0.1.0",
+  "name": "ai-career-agent",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "StarJobs — Telegram-бот, который за звёзды в день ищет работу по всей России и проверяет вакансии через ИИ (OpenRouter)",
+  "description": "AI Career Agent — личный Telegram-агент поиска работы: ищет вакансии по двум трекам, оценивает через ИИ (OpenRouter) и постит в топики группы",
   "license": "MIT",
-  "author": "Grigorij Dubrovskih <gri.dubrovskih@gmail.com>",
   "engines": {
     "node": ">=20"
   },
@@ -14,8 +13,7 @@
     "start": "node dist/index.js",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "try:search": "tsx src/scripts/try-search.ts",
-    "try:bot": "tsx src/scripts/try-bot.ts"
+    "try:search": "tsx src/scripts/try-search.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.7",

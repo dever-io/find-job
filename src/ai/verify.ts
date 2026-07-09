@@ -1,5 +1,5 @@
 import { config } from "../config.js";
-import type { Plan, SearchQuery, Vacancy, VerifyResult } from "../types.js";
+import type { SearchQuery, Vacancy, VerifyResult } from "../types.js";
 import { chat } from "./openrouter.js";
 
 const SYSTEM =
@@ -70,10 +70,9 @@ function heuristic(q: SearchQuery, v: Vacancy): VerifyResult {
   };
 }
 
-/** Проверка одной вакансии: перебор моделей плана, затем фолбэк на эвристику. */
-export async function verifyOne(q: SearchQuery, v: Vacancy, plan: Plan): Promise<VerifyResult> {
-  const isPro = plan === "pro";
-  const models = isPro ? [config.proModel] : config.freeModels;
+/** Проверка одной вакансии: перебор моделей скоринга, затем фолбэк на эвристику. */
+export async function verifyOne(q: SearchQuery, v: Vacancy): Promise<VerifyResult> {
+  const models = config.scoreModels;
   if (config.openRouterKey && models.length) {
     for (const model of models) {
       try {
@@ -81,9 +80,7 @@ export async function verifyOne(q: SearchQuery, v: Vacancy, plan: Plan): Promise
           model,
           system: SYSTEM,
           user: buildPrompt(q, v),
-          // для Про (reasoning-модель qwen3-32b) отключаем thinking и даём запас токенов
-          maxTokens: isPro ? 500 : 250,
-          reasoningEnabled: isPro ? false : undefined,
+          maxTokens: 300,
         });
         const p = parse(text);
         if (p) return { vacancyId: v.id, model, ...p };
@@ -96,14 +93,14 @@ export async function verifyOne(q: SearchQuery, v: Vacancy, plan: Plan): Promise
 }
 
 /** Проверка списка вакансий с ограниченным параллелизмом. */
-export async function verifyMany(q: SearchQuery, vacancies: Vacancy[], plan: Plan): Promise<VerifyResult[]> {
+export async function verifyMany(q: SearchQuery, vacancies: Vacancy[]): Promise<VerifyResult[]> {
   const out: VerifyResult[] = new Array(vacancies.length);
   let idx = 0;
   const workers = Math.max(1, Math.min(config.verifyConcurrency, vacancies.length || 1));
   async function worker() {
     while (idx < vacancies.length) {
       const i = idx++;
-      out[i] = await verifyOne(q, vacancies[i], plan);
+      out[i] = await verifyOne(q, vacancies[i]);
     }
   }
   await Promise.all(Array.from({ length: workers }, worker));

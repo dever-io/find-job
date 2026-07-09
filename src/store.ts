@@ -2,28 +2,32 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { config } from "./config.js";
 import { nowIso } from "./util.js";
-import { defaultSubscription, type UserRecord } from "./types.js";
+import type { Status, StoredVacancy, TrackId } from "./types.js";
 
-export interface PaymentRecord {
-  chargeId: string;
-  userId: number;
-  stars: number;
-  plan: string;
-  isRecurring: boolean;
-  at: string;
+/** Куда бот постит: id супергруппы и message_thread_id топиков. */
+export type TopicKey = TrackId | "inbox" | "digest";
+
+interface Meta {
+  groupId?: number;
+  topics: Partial<Record<TopicKey, number>>;
 }
 
 interface DB {
-  users: Record<string, UserRecord>;
-  payments: PaymentRecord[];
+  meta: Meta;
+  seen: Partial<Record<TrackId, string[]>>; // дедуп по трекам
+  vacancies: Record<string, StoredVacancy>;
+}
+
+function emptyDB(): DB {
+  return { meta: { topics: {} }, seen: {}, vacancies: {} };
 }
 
 /**
- * Простое персистентное JSON-хранилище с атомарной записью.
- * Достаточно для MVP; интерфейс легко заменить на Redis/Postgres.
+ * Персистентное JSON-хранилище с атомарной записью.
+ * Личный инструмент → один владелец, без юзеров/подписок.
  */
 class Store {
-  private db: DB = { users: {}, payments: [] };
+  private db: DB = emptyDB();
   private file = path.join(config.dataDir, "store.json");
   private chain: Promise<void> = Promise.resolve();
   private loaded = false;
@@ -34,7 +38,12 @@ class Store {
     try {
       const raw = await fs.readFile(this.file, "utf8");
       const parsed = JSON.parse(raw) as Partial<DB>;
-      this.db = { users: parsed.users ?? {}, payments: parsed.payments ?? [] };
+      const base = emptyDB();
+      this.db = {
+        meta: { ...base.meta, ...parsed.meta, topics: { ...base.meta.topics, ...parsed.meta?.topics } },
+        seen: parsed.seen ?? {},
+        vacancies: parsed.vacancies ?? {},
+      };
     } catch (e: any) {
       if (e?.code !== "ENOENT") throw e;
       await this.flush();
@@ -53,56 +62,72 @@ class Store {
     return this.chain;
   }
 
-  get(userId: number): UserRecord | undefined {
-    return this.db.users[String(userId)];
+  // ---- Привязка группы/топиков ----
+
+  get meta(): Meta {
+    return this.db.meta;
   }
 
-  /** Гарантирует наличие записи пользователя, обновляя контактные поля. */
-  ensure(u: { id: number; chatId: number; username?: string; firstName?: string }): UserRecord {
-    const key = String(u.id);
-    let rec = this.db.users[key];
-    if (!rec) {
-      rec = {
-        id: u.id,
-        chatId: u.chatId,
-        username: u.username,
-        firstName: u.firstName,
-        createdAt: nowIso(),
-        subscription: defaultSubscription(),
-        seenVacancyIds: [],
-      };
-      this.db.users[key] = rec;
-      void this.flush();
-    } else {
-      rec.chatId = u.chatId;
-      if (u.username) rec.username = u.username;
-      if (u.firstName) rec.firstName = u.firstName;
-    }
-    return rec;
-  }
-
-  async save(rec: UserRecord): Promise<void> {
-    this.db.users[String(rec.id)] = rec;
+  async bindTopic(key: TopicKey, groupId: number, threadId?: number): Promise<void> {
+    this.db.meta.groupId = groupId;
+    if (threadId !== undefined) this.db.meta.topics[key] = threadId;
     await this.flush();
   }
 
-  all(): UserRecord[] {
-    return Object.values(this.db.users);
+  threadId(key: TopicKey): number | undefined {
+    return this.db.meta.topics[key];
   }
 
-  async addPayment(rec: PaymentRecord): Promise<void> {
-    this.db.payments.push(rec);
-    await this.flush();
+  // ---- Дедуп ----
+
+  isSeen(track: TrackId, id: string): boolean {
+    return (this.db.seen[track] ?? []).includes(id);
   }
 
-  /** Помечает вакансии как показанные (с ограничением размера истории). */
-  markSeen(rec: UserRecord, ids: string[], cap = 1000): void {
-    const set = new Set(rec.seenVacancyIds);
+  seenSet(track: TrackId): Set<string> {
+    return new Set(this.db.seen[track] ?? []);
+  }
+
+  markSeen(track: TrackId, ids: string[], cap = 2000): void {
+    const set = new Set(this.db.seen[track] ?? []);
     for (const id of ids) set.add(id);
     let arr = Array.from(set);
     if (arr.length > cap) arr = arr.slice(arr.length - cap);
-    rec.seenVacancyIds = arr;
+    this.db.seen[track] = arr;
+  }
+
+  // ---- Вакансии ----
+
+  getVacancy(id: string): StoredVacancy | undefined {
+    return this.db.vacancies[id];
+  }
+
+  async upsertVacancy(v: StoredVacancy): Promise<void> {
+    this.db.vacancies[v.id] = v;
+    await this.flush();
+  }
+
+  async setStatus(id: string, status: Status): Promise<StoredVacancy | undefined> {
+    const v = this.db.vacancies[id];
+    if (!v) return undefined;
+    v.status = status;
+    await this.flush();
+    return v;
+  }
+
+  allVacancies(): StoredVacancy[] {
+    return Object.values(this.db.vacancies);
+  }
+
+  /** Вакансии, добавленные за последние N дней (для дайджеста). */
+  vacanciesSince(sinceIso: string): StoredVacancy[] {
+    return this.allVacancies().filter((v) => v.createdAt >= sinceIso);
+  }
+
+  async save(): Promise<void> {
+    await this.flush();
   }
 }
 
 export const store = new Store();
+export { nowIso };
