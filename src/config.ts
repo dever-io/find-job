@@ -16,7 +16,7 @@ export const config = {
   openRouterUrl: env.OPENROUTER_URL ?? "https://openrouter.ai/api/v1/chat/completions",
   freeModels: (
     env.OPENROUTER_FREE_MODELS ??
-    "deepseek/deepseek-chat-v3-0324:free,meta-llama/llama-3.3-70b-instruct:free,google/gemini-2.0-flash-exp:free,qwen/qwen-2.5-72b-instruct:free"
+    "meta-llama/llama-3.3-70b-instruct:free,google/gemma-4-31b-it:free,google/gemma-4-26b-a4b-it:free,qwen/qwen3-next-80b-a3b-instruct:free,nousresearch/hermes-3-llama-3.1-405b:free,meta-llama/llama-3.2-3b-instruct:free"
   )
     .split(",")
     .map((s) => s.trim())

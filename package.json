@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "description": "StarJobs — Telegram-бот, который за звёзды в день ищет работу по всей России и проверяет вакансии через ИИ (OpenRouter)",
+  "license": "MIT",
+  "author": "Grigorij Dubrovskih <gri.dubrovskih@gmail.com>",
   "engines": {
     "node": ">=20"
   },

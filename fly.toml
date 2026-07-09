@@ -1,0 +1,23 @@
+# Fly.io config для StarJobs (find-job-bot).
+# Бот работает в режиме long polling (нет входящего HTTP) → это worker без сервисов.
+app = "find-job-bot"
+primary_region = "arn"   # Стокгольм — ближайший к РФ доступный регион Fly (HH.ru всё равно гео-блокирует ЕС IP)
+
+[build]
+
+[env]
+  DATA_DIR = "/data"
+  CRON_TZ = "Europe/Moscow"
+  CRON_EXPR = "0 9 * * *"
+  # HH.ru блокирует зарубежные IP. Если появится RU-прокси — переопредели HH_API_BASE секретом.
+  HH_API_BASE = "https://api.hh.ru"
+
+# Персистентное хранилище (data/store.json): пользователи, подписки, история.
+[[mounts]]
+  source = "starjobs_data"
+  destination = "/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+  cpus = 1
