@@ -40,6 +40,8 @@ export const config = {
 
   cronExpr: env.CRON_EXPR ?? "0 9 * * *",
   cronTz: env.CRON_TZ ?? "Europe/Moscow",
+  // Частый скан «горячих» вакансий (по умолчанию — каждый час в :15).
+  hotCronExpr: env.HOT_CRON_EXPR ?? "15 * * * *",
   // Еженедельный дайджест (по умолчанию — понедельник 10:00).
   digestCronExpr: env.DIGEST_CRON_EXPR ?? "0 10 * * 1",
 

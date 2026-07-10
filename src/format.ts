@@ -51,28 +51,60 @@ export interface CardOpts {
   statusLine?: string; // напр. итоговый статус после нажатия кнопки
 }
 
-/** Карточка вакансии в HTML. */
+/** Краткое описание вакансии: 2–3 предложения из полного текста/сниппета. */
+function shortDesc(v: Vacancy, maxLen = 300): string {
+  const raw = (v.description || v.snippet || "").replace(/\s+/g, " ").trim();
+  if (!raw) return "";
+  // берём до 3 предложений, но не длиннее maxLen (обрезаем по границе слова)
+  const sentences = (raw.match(/[^.!?]+[.!?]+/g)?.slice(0, 3).map((s) => s.trim()).join(" ") || raw).trim();
+  if (sentences.length <= maxLen) return sentences;
+  const cut = sentences.slice(0, maxLen);
+  return cut.slice(0, cut.lastIndexOf(" ") > 0 ? cut.lastIndexOf(" ") : maxLen).trim() + "…";
+}
+
+/** Карточка вакансии в HTML (spec §9). */
 export function vacancyCard(v: Vacancy, verdict?: VerifyResult, opts: CardOpts = {}): string {
-  const head: string[] = [];
-  if (opts.track) head.push(`[Track ${opts.track}]`);
-  if (opts.hot) head.push("🔥 Горячая");
   const lines: string[] = [];
-  if (head.length) lines.push(`<i>${head.join("  ")}</i>`);
+
+  const head: string[] = [];
+  if (opts.track) head.push(`Track ${opts.track}`);
+  if (opts.hot) head.push("🔥 Горячая");
+  if (head.length) lines.push(`<i>${escapeHtml(head.join("  ·  "))}</i>`);
   lines.push(`<b>${escapeHtml(v.title)}</b>`);
+  lines.push("");
 
   const meta: string[] = [];
   if (v.company) meta.push("🏢 " + escapeHtml(v.company));
   if (v.area) meta.push("📍 " + escapeHtml(v.area));
-  if (meta.length) lines.push(meta.join(" · "));
+  if (meta.length) lines.push(meta.join("  ·  "));
   lines.push("💰 " + escapeHtml(fmtMoney(v.salaryFrom, v.salaryTo, v.currency)));
-  if (v.experienceName) lines.push("🧭 " + escapeHtml(v.experienceName));
+  if (v.experienceName) lines.push("🧭 Опыт: " + escapeHtml(v.experienceName));
   if (verdict) {
-    lines.push(`${scoreEmoji(verdict.score)} <b>${verdict.score}/100</b> — ${escapeHtml(verdict.reason)}`);
-    for (const r of (verdict.matchReasons ?? []).slice(0, 3)) lines.push("✅ " + escapeHtml(r));
-    for (const r of (verdict.mismatchReasons ?? []).slice(0, 2)) lines.push("⚠️ " + escapeHtml(r));
+    lines.push(`${scoreEmoji(verdict.score)} Совпадение: <b>${verdict.score}%</b>`);
   }
+
+  const pros = (verdict?.matchReasons ?? []).slice(0, 4);
+  if (pros.length) {
+    lines.push("");
+    lines.push("<b>Почему подходит:</b>");
+    for (const r of pros) lines.push("✅ " + escapeHtml(r));
+  }
+  const cons = (verdict?.mismatchReasons ?? []).slice(0, 3);
+  if (cons.length) {
+    lines.push("");
+    lines.push("<b>Что смущает:</b>");
+    for (const r of cons) lines.push("⚠️ " + escapeHtml(r));
+  }
+
+  const desc = shortDesc(v);
+  if (desc) {
+    lines.push("");
+    lines.push(`<i>${escapeHtml(desc)}</i>`);
+  }
+
+  lines.push("");
   lines.push(`<i>Источник: ${escapeHtml(SRC_LABEL[v.source] ?? v.source)}</i>`);
-  if (opts.statusLine) lines.push(`\n${opts.statusLine}`);
+  if (opts.statusLine) lines.push(opts.statusLine);
   return lines.join("\n");
 }
 
