@@ -37,6 +37,9 @@ export const config = {
   hhUserAgent: env.HH_USER_AGENT ?? "CareerAgent/0.2 (d.alxndrov@gmail.com)",
   // Секрет для реверс-прокси HH (заголовок X-Proxy-Key). Пусто = ходим напрямую.
   hhProxyKey: env.HH_PROXY_KEY ?? "",
+  // Access token приложения HH (dev.hh.ru/admin). Авторизованный доступ обходит
+  // блокировку анонимных дата-центровых IP (Selectel/облака).
+  hhAccessToken: env.HH_ACCESS_TOKEN ?? "",
 
   cronExpr: env.CRON_EXPR ?? "0 9 * * *",
   cronTz: env.CRON_TZ ?? "Europe/Moscow",

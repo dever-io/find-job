@@ -6,6 +6,8 @@ const HH_HEADERS: Record<string, string> = {
   "User-Agent": config.hhUserAgent,
   // при работе через RU-прокси шлём секрет, иначе прокси ответит 403
   ...(config.hhProxyKey ? { "X-Proxy-Key": config.hhProxyKey } : {}),
+  // авторизованный доступ HH (обходит блок анонимных дата-центровых IP)
+  ...(config.hhAccessToken ? { Authorization: `Bearer ${config.hhAccessToken}` } : {}),
 };
 
 function stripHl(s: string): string {
