@@ -51,7 +51,7 @@ export function buildDigest(days = 7): string {
   const since = new Date(Date.now() - days * 86400_000).toISOString();
   const recent = store.vacanciesSince(since);
 
-  const lines: string[] = [`<b>📊 Дайджест за ${days} дн.</b>`];
+  const lines: string[] = ["#аналитика", `<b>📊 Дайджест за ${days} дн.</b>`];
   if (!recent.length) {
     lines.push("");
     lines.push("За период новых вакансий не было.");
@@ -65,17 +65,15 @@ export function buildDigest(days = 7): string {
   return lines.join("\n");
 }
 
-/** Постит дайджест в топик «Аналитика» (fallback: General группы). */
+/** Постит дайджест в единый чат (помечен #аналитика). */
 export async function postDigest(api: Api, days = 7): Promise<boolean> {
-  const groupId = store.meta.groupId;
-  if (!groupId) {
-    console.warn("[digest] группа не привязана — пропуск");
+  const chatId = store.meta.chatId;
+  if (!chatId) {
+    console.warn("[digest] чат не привязан — пропуск");
     return false;
   }
-  const threadId = store.threadId("digest");
   await api
-    .sendMessage(groupId, buildDigest(days), {
-      message_thread_id: threadId,
+    .sendMessage(chatId, buildDigest(days), {
       parse_mode: "HTML",
       link_preview_options: { is_disabled: true },
     })

@@ -8,6 +8,11 @@ import { generateLetter, type LetterOpts } from "../ai/letter.js";
 
 type Ctx = BotContext<Session>;
 
+/** Хэштег трека вакансии (для шапки карточки/письма). */
+function tagOf(rec: StoredVacancy): string | undefined {
+  return store.getTrack(rec.track)?.hashtag;
+}
+
 /** Перерисовывает карточку вакансии с итоговым статусом и убирает кнопки действий. */
 async function settle(ctx: Ctx, id: string, status: Status): Promise<void> {
   const rec = await store.setStatus(id, status);
@@ -16,7 +21,7 @@ async function settle(ctx: Ctx, id: string, status: Status): Promise<void> {
     return;
   }
   const text = vacancyCard(rec.vacancy, rec.verdict, {
-    track: rec.track,
+    tag: tagOf(rec),
     hot: rec.hot,
     statusLine: statusLabel(status),
   });
@@ -27,13 +32,6 @@ async function settle(ctx: Ctx, id: string, status: Status): Promise<void> {
       reply_markup: openKeyboard(rec.vacancy.url),
     })
     .catch(() => {});
-}
-
-/** Куда постим письмо: топик «Отклики», иначе — топик трека вакансии. */
-function letterTarget(rec: StoredVacancy): { groupId: number; threadId?: number } | null {
-  const groupId = store.meta.groupId;
-  if (!groupId) return null;
-  return { groupId, threadId: store.threadId("inbox") ?? store.threadId(rec.track) };
 }
 
 /** Генерация письма + правка существующего черновика — общий путь для всех кнопок. */
@@ -55,13 +53,18 @@ async function makeLetter(ctx: Ctx, id: string, opts: LetterOpts): Promise<void>
     await ctx.reply(`Не удалось сгенерировать письмо: ${e?.message ?? e}`);
     return;
   }
-  const body = letterCard(rec.vacancy, letter, rec.track);
+  const body = letterCard(rec.vacancy, letter, tagOf(rec));
   const kb = letterKeyboard(rec.vacancy.id, rec.vacancy.url);
+  const chatId = store.meta.chatId;
+  if (chatId === undefined) {
+    await ctx.reply("Чат не настроен — напиши /start.");
+    return;
+  }
 
-  // Есть черновик — правим его на месте; иначе постим новый в топик «Отклики».
-  if (rec.letterMessageId !== undefined && store.meta.groupId) {
+  // Есть черновик — правим его на месте; иначе постим новый в единый чат.
+  if (rec.letterMessageId !== undefined) {
     await ctx.api
-      .editMessageText(store.meta.groupId, rec.letterMessageId, body, {
+      .editMessageText(chatId, rec.letterMessageId, body, {
         parse_mode: "HTML",
         link_preview_options: { is_disabled: true },
         reply_markup: kb,
@@ -71,14 +74,8 @@ async function makeLetter(ctx: Ctx, id: string, opts: LetterOpts): Promise<void>
     return;
   }
 
-  const dst = letterTarget(rec);
-  if (!dst) {
-    await ctx.reply("Группа не привязана — некуда отправить письмо. См. /help.");
-    return;
-  }
   const sent = await ctx.api
-    .sendMessage(dst.groupId, body, {
-      message_thread_id: dst.threadId,
+    .sendMessage(chatId, body, {
       parse_mode: "HTML",
       link_preview_options: { is_disabled: true },
       reply_markup: kb,
@@ -87,7 +84,7 @@ async function makeLetter(ctx: Ctx, id: string, opts: LetterOpts): Promise<void>
       console.error("[letter] send failed:", e?.message ?? e);
       return undefined;
     });
-  await store.setLetter(id, letter, { messageId: sent?.message_id, threadId: dst.threadId });
+  await store.setLetter(id, letter, { messageId: sent?.message_id });
 }
 
 export function registerActions(bot: Bot<Ctx>): void {
@@ -144,19 +141,19 @@ export function registerActions(bot: Bot<Ctx>): void {
     await store.setStatus(id, "Responded");
     const footer = `✅ <b>${statusLabel("Responded")}</b>`;
     await ctx
-      .editMessageText(letterCard(rec.vacancy, rec.letter, rec.track, footer), {
+      .editMessageText(letterCard(rec.vacancy, rec.letter, tagOf(rec), footer), {
         parse_mode: "HTML",
         link_preview_options: { is_disabled: true },
         reply_markup: openKeyboard(rec.vacancy.url),
       })
       .catch(() => {});
     // Обновляем и саму карточку вакансии: статус + клавиатура продвижения воронки.
-    if (rec.cardMessageId !== undefined && store.meta.groupId) {
+    if (rec.cardMessageId !== undefined && store.meta.chatId !== undefined) {
       await ctx.api
         .editMessageText(
-          store.meta.groupId,
+          store.meta.chatId,
           rec.cardMessageId,
-          vacancyCard(rec.vacancy, rec.verdict, { track: rec.track, hot: rec.hot, statusLine: statusLabel("Responded") }),
+          vacancyCard(rec.vacancy, rec.verdict, { tag: tagOf(rec), hot: rec.hot, statusLine: statusLabel("Responded") }),
           {
             parse_mode: "HTML",
             link_preview_options: { is_disabled: true },
@@ -178,7 +175,7 @@ export function registerActions(bot: Bot<Ctx>): void {
     await ctx.answerCallbackQuery({ text: statusLabel(status) });
     await ctx
       .editMessageText(
-        vacancyCard(rec.vacancy, rec.verdict, { track: rec.track, hot: rec.hot, statusLine: statusLabel(status) }),
+        vacancyCard(rec.vacancy, rec.verdict, { tag: tagOf(rec), hot: rec.hot, statusLine: statusLabel(status) }),
         {
           parse_mode: "HTML",
           link_preview_options: { is_disabled: true },

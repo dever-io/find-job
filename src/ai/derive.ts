@@ -36,6 +36,7 @@ export interface ResumeTrack {
   title: string;
   keywords: string;
   experience?: Experience;
+  tag?: string;
 }
 
 /**
@@ -49,13 +50,14 @@ export async function deriveResumeTrack(resume: string): Promise<ResumeTrack> {
   const user =
     `Резюме:\n${resume.slice(0, 6000)}\n\n` +
     `Определи основную целевую должность кандидата и поисковый запрос для hh.ru.\n` +
-    `Верни JSON: {"title":"короткое название должности","keywords":"2-5 ключевых слов/синонимов для поиска","experience":"noExperience|between1And3|between3And6|moreThan6"}`;
+    `Верни JSON: {"title":"короткое название должности","keywords":"2-5 ключевых слов/синонимов для поиска","experience":"noExperience|between1And3|between3And6|moreThan6","tag":"одно-два слова для хэштега подборки, напр. видеопродакшн"}`;
   const o = await askJson(system, user);
   if (!o?.keywords) throw new Error("модель не вернула ключевые слова");
   return {
     title: String(o.title || o.keywords).slice(0, 80),
     keywords: String(o.keywords).slice(0, 200),
     experience: asExp(o.experience),
+    tag: o.tag ? String(o.tag).slice(0, 40) : undefined,
   };
 }
 
@@ -63,6 +65,7 @@ export interface TargetTrack {
   title: string;
   keywords: string;
   transferPrompt: string;
+  tag?: string;
 }
 
 /**
@@ -75,10 +78,11 @@ export async function deriveTargetTrack(resume: string, targetRole: string): Pro
   const meta = await askJson(
     "Ты помогаешь настроить поиск вакансий. Верни ТОЛЬКО JSON без пояснений.",
     `Желаемое направление кандидата: "${targetRole}".\n` +
-      `Верни JSON: {"title":"короткое название должности","keywords":"2-5 ключевых слов/синонимов для поиска на hh.ru"}`,
+      `Верни JSON: {"title":"короткое название должности","keywords":"2-5 ключевых слов/синонимов для поиска на hh.ru","tag":"одно-два слова для хэштега подборки"}`,
   );
   const title = String(meta?.title || targetRole).slice(0, 80);
   const keywords = String(meta?.keywords || targetRole).slice(0, 200);
+  const tag = meta?.tag ? String(meta.tag).slice(0, 40) : undefined;
 
   const transferPrompt = await chat({
     model: config.letterModel,
@@ -93,6 +97,7 @@ export async function deriveTargetTrack(resume: string, targetRole: string): Pro
   return {
     title,
     keywords,
+    tag,
     transferPrompt:
       transferPrompt.trim() ||
       `Кандидат переходит в «${targetRole}». Оценивай через transferable skills из резюме, не приписывая несуществующего опыта.`,

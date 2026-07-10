@@ -4,14 +4,11 @@ import { config } from "./config.js";
 import { nowIso } from "./util.js";
 import type { Status, StoredVacancy, TrackConfig, TrackId } from "./types.js";
 
-/** Куда бот постит: id супергруппы и message_thread_id топиков. */
-export type TopicKey = TrackId | "inbox" | "digest";
-
 interface Meta {
-  groupId?: number;
+  /** Единый чат для постинга карточек/писем/аналитики (личка владельца). */
+  chatId?: number;
   /** Владелец, пойманный в рантайме (fallback к config.ownerId, если env пуст). */
   ownerId?: number;
-  topics: Partial<Record<TopicKey, number>>;
 }
 
 interface DB {
@@ -22,7 +19,7 @@ interface DB {
 }
 
 function emptyDB(): DB {
-  return { meta: { topics: {} }, tracks: {}, seen: {}, vacancies: {} };
+  return { meta: {}, tracks: {}, seen: {}, vacancies: {} };
 }
 
 /**
@@ -42,8 +39,10 @@ class Store {
       const raw = await fs.readFile(this.file, "utf8");
       const parsed = JSON.parse(raw) as Partial<DB>;
       const base = emptyDB();
+      const pm: any = parsed.meta ?? {};
       this.db = {
-        meta: { ...base.meta, ...parsed.meta, topics: { ...base.meta.topics, ...parsed.meta?.topics } },
+        // миграция: старое meta.groupId → chatId
+        meta: { ...base.meta, ...pm, chatId: pm.chatId ?? pm.groupId },
         tracks: parsed.tracks ?? {},
         seen: parsed.seen ?? {},
         vacancies: parsed.vacancies ?? {},
@@ -66,19 +65,19 @@ class Store {
     return this.chain;
   }
 
-  // ---- Привязка группы/топиков ----
+  // ---- Чат для постинга / владелец ----
 
   get meta(): Meta {
     return this.db.meta;
   }
 
-  async bindTopic(key: TopicKey, groupId: number, threadId?: number): Promise<void> {
-    this.db.meta.groupId = groupId;
-    if (threadId !== undefined) this.db.meta.topics[key] = threadId;
+  /** Задать единый чат для постинга (личка владельца). */
+  async setChat(chatId: number): Promise<void> {
+    this.db.meta.chatId = chatId;
     await this.flush();
   }
 
-  /** Запомнить владельца (первая привязка в личке), если ещё не задан. */
+  /** Запомнить владельца, если ещё не задан. */
   async setOwner(id: number): Promise<void> {
     this.db.meta.ownerId = id;
     await this.flush();
@@ -102,10 +101,6 @@ class Store {
   async setTrack(cfg: TrackConfig): Promise<void> {
     this.db.tracks[cfg.id] = cfg;
     await this.flush();
-  }
-
-  threadId(key: TopicKey): number | undefined {
-    return this.db.meta.topics[key];
   }
 
   // ---- Дедуп ----

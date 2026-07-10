@@ -13,21 +13,11 @@ export function isHot(publishedAt: string | undefined, score: number): boolean {
   return Number.isFinite(ageH) && ageH <= 24;
 }
 
-/** Куда постим трек: группа + тред топика. null — трек не привязан. */
-function target(trackId: TrackId): { groupId: number; threadId: number } | null {
-  const groupId = store.meta.groupId;
-  const threadId = store.threadId(trackId);
-  if (!groupId || threadId === undefined) {
-    console.warn(`[run] трек ${trackId} не привязан к топику — пропуск`);
-    return null;
-  }
-  return { groupId, threadId };
-}
-
-/** Постит набор матчей в топик трека, помечает их seen, сохраняет в историю. */
+/** Постит набор матчей в единый чат с хэштегом трека, помечает seen, сохраняет. */
 async function postMatches(api: Api, trackId: TrackId, matches: Match[]): Promise<number> {
-  const dst = target(trackId);
-  if (!dst || !matches.length) return 0;
+  const chatId = store.meta.chatId;
+  const tag = store.getTrack(trackId)?.hashtag;
+  if (!chatId || !matches.length) return 0;
 
   store.markSeen(
     trackId,
@@ -37,10 +27,9 @@ async function postMatches(api: Api, trackId: TrackId, matches: Match[]): Promis
 
   for (const m of matches) {
     const hot = isHot(m.vacancy.publishedAt, m.verdict.score);
-    const text = vacancyCard(m.vacancy, m.verdict, { track: trackId, hot });
+    const text = vacancyCard(m.vacancy, m.verdict, { tag, hot });
     const sent = await api
-      .sendMessage(dst.groupId, text, {
-        message_thread_id: dst.threadId,
+      .sendMessage(chatId, text, {
         parse_mode: "HTML",
         reply_markup: actionKeyboard(m.vacancy.id, m.vacancy.url),
         link_preview_options: { is_disabled: true },
@@ -69,7 +58,7 @@ async function postMatches(api: Api, trackId: TrackId, matches: Match[]): Promis
 /** Плановый прогон одного трека: поиск за 3 дня → постинг всех матчей. */
 export async function runTrack(api: Api, trackId: TrackId): Promise<number> {
   const track = store.getTrack(trackId);
-  if (!track || !target(trackId)) return 0;
+  if (!track || store.meta.chatId === undefined) return 0;
   const matches = await findMatches(track, {
     excludeIds: store.seenSet(trackId),
     periodDays: 3,
@@ -82,7 +71,7 @@ export async function runTrack(api: Api, trackId: TrackId): Promise<number> {
 /** Горячий скан трека: свежие (≤1 день) → постим ТОЛЬКО 🔥, seen ставим только им. */
 export async function runHotTrack(api: Api, trackId: TrackId): Promise<number> {
   const track = store.getTrack(trackId);
-  if (!track || !target(trackId)) return 0;
+  if (!track || store.meta.chatId === undefined) return 0;
   const matches = await findMatches(track, {
     excludeIds: store.seenSet(trackId),
     periodDays: 1,

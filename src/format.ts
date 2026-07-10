@@ -1,4 +1,4 @@
-import type { Vacancy, VerifyResult, TrackId } from "./types.js";
+import type { Vacancy, VerifyResult } from "./types.js";
 
 /** Экранирование для parse_mode: "HTML" (& первым!). */
 export function escapeHtml(s: string): string {
@@ -46,7 +46,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export interface CardOpts {
-  track?: TrackId;
+  tag?: string; // хэштег трека, напр. "#видеопродакшн" (кликабельная подборка)
   hot?: boolean;
   statusLine?: string; // напр. итоговый статус после нажатия кнопки
 }
@@ -66,10 +66,11 @@ function shortDesc(v: Vacancy, maxLen = 300): string {
 export function vacancyCard(v: Vacancy, verdict?: VerifyResult, opts: CardOpts = {}): string {
   const lines: string[] = [];
 
+  // Хэштег — плоским текстом (Telegram сам делает его кликабельным).
   const head: string[] = [];
-  if (opts.track) head.push(`Track ${opts.track}`);
+  if (opts.tag) head.push(escapeHtml(opts.tag));
   if (opts.hot) head.push("🔥 Горячая");
-  if (head.length) lines.push(`<i>${escapeHtml(head.join("  ·  "))}</i>`);
+  if (head.length) lines.push(head.join("  ·  "));
   lines.push(`<b>${escapeHtml(v.title)}</b>`);
   lines.push("");
 
@@ -112,11 +113,11 @@ export function statusLabel(status: string): string {
   return STATUS_LABEL[status] ?? status;
 }
 
-/** Черновик сопроводительного письма в топике «Отклики». */
-export function letterCard(v: Vacancy, letter: string, track?: TrackId, footer?: string): string {
+/** Черновик сопроводительного письма (единый чат, помечен #отклик + хэштег трека). */
+export function letterCard(v: Vacancy, letter: string, tag?: string, footer?: string): string {
   const lines: string[] = [];
-  const tag = track ? `Track ${track} · ` : "";
-  lines.push(`<i>${escapeHtml(tag)}✍️ Сопроводительное письмо</i>`);
+  lines.push(["#отклик", tag ? escapeHtml(tag) : ""].filter(Boolean).join("  ·  "));
+  lines.push("<i>✍️ Сопроводительное письмо</i>");
   lines.push(`<b>${escapeHtml(v.title)}${v.company ? " · " + escapeHtml(v.company) : ""}</b>`);
   lines.push("");
   lines.push(escapeHtml(letter));

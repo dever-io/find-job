@@ -22,11 +22,25 @@ export const WEIGHTS_B: ScoreWeights = {
 
 const DEFAULT_AREA = { areaId: "113", areaName: "Россия" };
 
+/** Строка → хэштег: «Видео продакшн» → «#видео_продакшн». Кириллица ок. */
+export function toHashtag(s: string): string {
+  const base = s
+    .toLowerCase()
+    .replace(/^#/, "")
+    .replace(/ё/g, "е")
+    .replace(/[^a-zа-я0-9]+/gi, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 24)
+    .replace(/_+$/g, "");
+  return "#" + (base || "трек");
+}
+
 export interface TrackAInput {
   title: string;
   keywords: string;
   experience?: Experience;
   resume: string;
+  tag?: string; // основа для хэштега (иначе — из title)
 }
 
 export interface TrackBInput {
@@ -34,13 +48,15 @@ export interface TrackBInput {
   keywords: string;
   transferPrompt: string;
   resume: string;
+  tag?: string;
 }
 
 /** Основной трек — прямо по резюме пользователя. */
 export function buildTrackA(input: TrackAInput): TrackConfig {
   return {
     id: "A",
-    title: `Track A · ${input.title}`,
+    title: input.title,
+    hashtag: toHashtag(input.tag ?? input.title),
     query: { keywords: input.keywords, ...DEFAULT_AREA, experience: input.experience },
     weights: WEIGHTS_A,
     resumeProfile: input.resume,
@@ -51,7 +67,8 @@ export function buildTrackA(input: TrackAInput): TrackConfig {
 export function buildTrackB(input: TrackBInput): TrackConfig {
   return {
     id: "B",
-    title: `Track B · ${input.title}`,
+    title: input.title,
+    hashtag: toHashtag(input.tag ?? input.title),
     query: { keywords: input.keywords, ...DEFAULT_AREA },
     weights: WEIGHTS_B,
     resumeProfile: input.resume,

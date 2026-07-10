@@ -31,6 +31,8 @@ export interface ScoreWeights {
 export interface TrackConfig {
   id: TrackId;
   title: string;
+  /** Хэштег трека для подборки в едином чате, напр. "#видеопродакшн". */
+  hashtag: string;
   query: SearchQuery;
   weights: ScoreWeights;
   /** Базовый текст резюме под трек (для писем и скоринга). */

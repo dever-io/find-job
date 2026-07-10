@@ -6,7 +6,6 @@ import { escapeHtml } from "../format.js";
 import { buildTrackA, buildTrackB } from "../tracks/index.js";
 import { deriveResumeTrack, deriveTargetTrack } from "../ai/derive.js";
 import { downloadTelegramFile, extractPdfText, looksLikeResume } from "../resume.js";
-import { ensureTopics } from "../topics.js";
 
 type Ctx = BotContext<Session>;
 
@@ -28,7 +27,7 @@ async function askOnlyOrMore(ctx: Ctx, track: TrackConfig): Promise<void> {
     .text("➕ Добавить направление", "onb:more");
   await ctx.reply(
     [
-      `Основной трек: <b>${escapeHtml(track.title)}</b>`,
+      `Основной трек: <b>${escapeHtml(track.title)}</b>  ${escapeHtml(track.hashtag)}`,
       `Поиск: <code>${escapeHtml(track.query.keywords)}</code>`,
       "",
       "Искать только по резюме или добавить ещё направление (например, переход в другую сферу)?",
@@ -44,7 +43,7 @@ async function handleResume(ctx: Ctx, resume: string): Promise<void> {
   await ctx.reply("📄 Резюме принял. Определяю целевую должность…");
   try {
     const t = await deriveResumeTrack(resume);
-    const track = buildTrackA({ title: t.title, keywords: t.keywords, experience: t.experience, resume });
+    const track = buildTrackA({ title: t.title, keywords: t.keywords, experience: t.experience, tag: t.tag, resume });
     await store.setTrack(track);
     await askOnlyOrMore(ctx, track);
   } catch {
@@ -56,23 +55,25 @@ async function handleResume(ctx: Ctx, resume: string): Promise<void> {
   }
 }
 
-/** Финал: поймать владельца (в личке), создать темы, завершить. */
+/** Финал: запомнить владельца и чат, показать хэштеги подборок. */
 async function finalize(ctx: Ctx): Promise<void> {
   const chat = ctx.chat!;
-  if (chat.type !== "private" && chat.type !== "supergroup") {
-    await ctx.reply("Заверши онбординг в личке со мной (Threaded Mode вкл.) или в супергруппе с Темами.");
-    return;
-  }
-  if (chat.type === "private" && ctx.from && store.meta.ownerId === undefined) {
-    await store.setOwner(ctx.from.id);
-  }
-  const report = await ensureTopics(ctx.api, chat.id);
+  if (ctx.from && store.meta.ownerId === undefined) await store.setOwner(ctx.from.id);
+  await store.setChat(chat.id);
   ctx.session.awaiting = undefined;
   ctx.session.draftResume = undefined;
-  await ctx.reply(
-    ["<b>✅ Готово! Темы созданы:</b>", ...report, "", "Жми /run — начну искать вакансии. /help — что я умею."].join("\n"),
-    { parse_mode: "HTML" },
-  );
+
+  const lines = [
+    "<b>✅ Готово!</b>",
+    "Буду присылать вакансии сюда, помечая подборки хэштегами (жми по хэштегу — увидишь всё по нему):",
+    "",
+    ...store.tracks().map((t) => `${escapeHtml(t.hashtag)} — ${escapeHtml(t.title)}`),
+    "#отклик — сопроводительные письма",
+    "#аналитика — еженедельная сводка",
+    "",
+    "Жми /run — начну искать вакансии. /help — что я умею.",
+  ];
+  await ctx.reply(lines.join("\n"), { parse_mode: "HTML" });
 }
 
 export function registerOnboarding(bot: Bot<Ctx>): void {
@@ -138,7 +139,7 @@ export function registerOnboarding(bot: Bot<Ctx>): void {
       let track: TrackConfig;
       try {
         const t = await deriveTargetTrack(resume, text);
-        track = buildTrackB({ title: t.title, keywords: t.keywords, transferPrompt: t.transferPrompt, resume });
+        track = buildTrackB({ title: t.title, keywords: t.keywords, transferPrompt: t.transferPrompt, tag: t.tag, resume });
       } catch {
         track = buildTrackB({
           title: text.slice(0, 60),
