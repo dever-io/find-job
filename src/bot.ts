@@ -3,6 +3,7 @@ import { config } from "./config.js";
 import { store } from "./store.js";
 import type { Session } from "./types.js";
 import { registerCommands } from "./handlers/commands.js";
+import { registerOnboarding } from "./handlers/onboarding.js";
 import { registerActions } from "./handlers/actions.js";
 
 export type Ctx = BotContext<Session>;
@@ -25,6 +26,7 @@ export function makeBot() {
   });
 
   registerCommands(bot);
+  registerOnboarding(bot); // /start + диалоговый онбординг (до actions: ловит onb_* текст)
   registerActions(bot);
 
   return bot;

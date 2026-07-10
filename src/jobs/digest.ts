@@ -1,8 +1,7 @@
 import { type Api } from "grammy";
 import { store } from "../store.js";
-import { getTrack, TRACK_IDS } from "../tracks/index.js";
 import { escapeHtml } from "../format.js";
-import type { StoredVacancy, TrackId } from "../types.js";
+import type { StoredVacancy, TrackConfig } from "../types.js";
 
 const RESPONDED_PLUS = new Set(["Responded", "Interview", "Offer", "Rejected"]);
 
@@ -22,8 +21,7 @@ function topSkills(rows: StoredVacancy[], limit = 8): Array<[string, number]> {
   return [...freq.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit);
 }
 
-function trackBlock(trackId: TrackId, rows: StoredVacancy[]): string[] {
-  const track = getTrack(trackId);
+function trackBlock(track: TrackConfig, rows: StoredVacancy[]): string[] {
   const out: string[] = [`<b>${escapeHtml(track.title)}</b>`];
   if (!rows.length) {
     out.push("— новых вакансий не было");
@@ -60,9 +58,9 @@ export function buildDigest(days = 7): string {
     return lines.join("\n");
   }
   lines.push(`Всего вакансий: <b>${recent.length}</b>`);
-  for (const t of TRACK_IDS) {
+  for (const track of store.tracks()) {
     lines.push("");
-    lines.push(...trackBlock(t, recent.filter((v) => v.track === t)));
+    lines.push(...trackBlock(track, recent.filter((v) => v.track === track.id)));
   }
   return lines.join("\n");
 }

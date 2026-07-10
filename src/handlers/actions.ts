@@ -5,7 +5,6 @@ import { store } from "../store.js";
 import { vacancyCard, statusLabel, letterCard } from "../format.js";
 import { openKeyboard, letterKeyboard, statusKeyboard } from "../ui.js";
 import { generateLetter, type LetterOpts } from "../ai/letter.js";
-import { getTrack } from "../tracks/index.js";
 
 type Ctx = BotContext<Session>;
 
@@ -44,9 +43,14 @@ async function makeLetter(ctx: Ctx, id: string, opts: LetterOpts): Promise<void>
     await ctx.reply("Вакансия не найдена в истории.");
     return;
   }
+  const track = store.getTrack(rec.track);
+  if (!track) {
+    await ctx.reply("Трек этой вакансии не настроен — не могу составить письмо.");
+    return;
+  }
   let letter: string;
   try {
-    letter = await generateLetter(getTrack(rec.track), rec.vacancy, opts);
+    letter = await generateLetter(track, rec.vacancy, opts);
   } catch (e: any) {
     await ctx.reply(`Не удалось сгенерировать письмо: ${e?.message ?? e}`);
     return;

@@ -96,7 +96,16 @@ export interface StoredVacancy {
   letterThreadId?: number; // тред, где висит черновик (для editMessageText)
 }
 
-/** Сессия grammY: держит состояние диалога (правка письма и т.п.). */
+/** Ожидаемый следующий ввод пользователя (машина состояний диалога). */
+export type Awaiting =
+  | { kind: "letter_edit"; vacancyId: string }
+  | { kind: "onb_resume" } // ждём резюме (PDF или текст)
+  | { kind: "onb_keywords_a" } // ждём ключевые слова для трека по резюме (фолбэк без ИИ)
+  | { kind: "onb_track_b" }; // ждём описание второго направления
+
+/** Сессия grammY: держит состояние диалога (онбординг, правка письма). */
 export interface Session {
-  awaiting?: { kind: "letter_edit"; vacancyId: string };
+  awaiting?: Awaiting;
+  /** Текст резюме, пойманный в онбординге (до финализации треков). */
+  draftResume?: string;
 }

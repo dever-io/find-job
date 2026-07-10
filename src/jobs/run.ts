@@ -4,7 +4,6 @@ import { findMatches, type Match } from "./pipeline.js";
 import { vacancyCard } from "../format.js";
 import { actionKeyboard } from "../ui.js";
 import { sleep } from "../util.js";
-import { getTrack, TRACK_IDS } from "../tracks/index.js";
 import type { StoredVacancy, TrackId } from "../types.js";
 
 /** Горячая вакансия: свежая (≤24ч) и с высоким скором. */
@@ -69,8 +68,9 @@ async function postMatches(api: Api, trackId: TrackId, matches: Match[]): Promis
 
 /** Плановый прогон одного трека: поиск за 3 дня → постинг всех матчей. */
 export async function runTrack(api: Api, trackId: TrackId): Promise<number> {
-  if (!target(trackId)) return 0;
-  const matches = await findMatches(getTrack(trackId), {
+  const track = store.getTrack(trackId);
+  if (!track || !target(trackId)) return 0;
+  const matches = await findMatches(track, {
     excludeIds: store.seenSet(trackId),
     periodDays: 3,
   });
@@ -81,8 +81,9 @@ export async function runTrack(api: Api, trackId: TrackId): Promise<number> {
 
 /** Горячий скан трека: свежие (≤1 день) → постим ТОЛЬКО 🔥, seen ставим только им. */
 export async function runHotTrack(api: Api, trackId: TrackId): Promise<number> {
-  if (!target(trackId)) return 0;
-  const matches = await findMatches(getTrack(trackId), {
+  const track = store.getTrack(trackId);
+  if (!track || !target(trackId)) return 0;
+  const matches = await findMatches(track, {
     excludeIds: store.seenSet(trackId),
     periodDays: 1,
   });
@@ -92,15 +93,15 @@ export async function runHotTrack(api: Api, trackId: TrackId): Promise<number> {
   return n;
 }
 
-/** Прогон по всем трекам — вызывается дневным кроном и командой /run. */
+/** Прогон по всем настроенным трекам — вызывается дневным кроном и командой /run. */
 export async function runAll(api: Api): Promise<Record<TrackId, number>> {
   const result = {} as Record<TrackId, number>;
-  for (const t of TRACK_IDS) {
+  for (const track of store.tracks()) {
     try {
-      result[t] = await runTrack(api, t);
+      result[track.id] = await runTrack(api, track.id);
     } catch (e) {
-      console.error(`[run] трек ${t} упал`, e);
-      result[t] = 0;
+      console.error(`[run] трек ${track.id} упал`, e);
+      result[track.id] = 0;
     }
   }
   return result;
@@ -109,11 +110,11 @@ export async function runAll(api: Api): Promise<Record<TrackId, number>> {
 /** Горячий скан по всем трекам — вызывается частым кроном. */
 export async function runHotAll(api: Api): Promise<number> {
   let total = 0;
-  for (const t of TRACK_IDS) {
+  for (const track of store.tracks()) {
     try {
-      total += await runHotTrack(api, t);
+      total += await runHotTrack(api, track.id);
     } catch (e) {
-      console.error(`[run] горячий скан трека ${t} упал`, e);
+      console.error(`[run] горячий скан трека ${track.id} упал`, e);
     }
   }
   return total;

@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { config } from "./config.js";
 import { nowIso } from "./util.js";
-import type { Status, StoredVacancy, TrackId } from "./types.js";
+import type { Status, StoredVacancy, TrackConfig, TrackId } from "./types.js";
 
 /** Куда бот постит: id супергруппы и message_thread_id топиков. */
 export type TopicKey = TrackId | "inbox" | "digest";
@@ -16,12 +16,13 @@ interface Meta {
 
 interface DB {
   meta: Meta;
+  tracks: Partial<Record<TrackId, TrackConfig>>; // треки, собранные в онбординге
   seen: Partial<Record<TrackId, string[]>>; // дедуп по трекам
   vacancies: Record<string, StoredVacancy>;
 }
 
 function emptyDB(): DB {
-  return { meta: { topics: {} }, seen: {}, vacancies: {} };
+  return { meta: { topics: {} }, tracks: {}, seen: {}, vacancies: {} };
 }
 
 /**
@@ -43,6 +44,7 @@ class Store {
       const base = emptyDB();
       this.db = {
         meta: { ...base.meta, ...parsed.meta, topics: { ...base.meta.topics, ...parsed.meta?.topics } },
+        tracks: parsed.tracks ?? {},
         seen: parsed.seen ?? {},
         vacancies: parsed.vacancies ?? {},
       };
@@ -79,6 +81,26 @@ class Store {
   /** Запомнить владельца (первая привязка в личке), если ещё не задан. */
   async setOwner(id: number): Promise<void> {
     this.db.meta.ownerId = id;
+    await this.flush();
+  }
+
+  // ---- Треки (собираются в онбординге) ----
+
+  getTrack(id: TrackId): TrackConfig | undefined {
+    return this.db.tracks[id];
+  }
+
+  /** Настроенные треки по порядку id (A раньше B). */
+  tracks(): TrackConfig[] {
+    return (["A", "B"] as TrackId[]).map((id) => this.db.tracks[id]).filter((t): t is TrackConfig => Boolean(t));
+  }
+
+  hasTracks(): boolean {
+    return this.tracks().length > 0;
+  }
+
+  async setTrack(cfg: TrackConfig): Promise<void> {
+    this.db.tracks[cfg.id] = cfg;
     await this.flush();
   }
 
