@@ -90,6 +90,10 @@ export interface StoredVacancy {
   hot: boolean;
   cardMessageId?: number; // id сообщения-карточки для обновления по кнопкам
   createdAt: string;
+  // ---- Сопроводительное письмо (Фаза 3) ----
+  letter?: string; // текущий черновик/финал письма
+  letterMessageId?: number; // id сообщения-черновика в топике «Отклики»
+  letterThreadId?: number; // тред, где висит черновик (для editMessageText)
 }
 
 /** Сессия grammY: держит состояние диалога (правка письма и т.п.). */

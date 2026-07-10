@@ -24,7 +24,7 @@ export const config = {
     .map((s) => s.trim())
     .filter(Boolean),
   // Сильная модель для генерации сопроводительных писем (не free-tier).
-  letterModel: env.LETTER_MODEL ?? "deepseek/deepseek-chat",
+  letterModel: env.LETTER_MODEL ?? "deepseek/deepseek-v4-pro",
 
   appUrl: env.APP_PUBLIC_URL ?? "https://t.me",
   appTitle: env.APP_TITLE ?? "CareerAgent",

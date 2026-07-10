@@ -111,3 +111,18 @@ export function vacancyCard(v: Vacancy, verdict?: VerifyResult, opts: CardOpts =
 export function statusLabel(status: string): string {
   return STATUS_LABEL[status] ?? status;
 }
+
+/** Черновик сопроводительного письма в топике «Отклики». */
+export function letterCard(v: Vacancy, letter: string, track?: TrackId, footer?: string): string {
+  const lines: string[] = [];
+  const tag = track ? `Track ${track} · ` : "";
+  lines.push(`<i>${escapeHtml(tag)}✍️ Сопроводительное письмо</i>`);
+  lines.push(`<b>${escapeHtml(v.title)}${v.company ? " · " + escapeHtml(v.company) : ""}</b>`);
+  lines.push("");
+  lines.push(escapeHtml(letter));
+  if (footer) {
+    lines.push("");
+    lines.push(footer);
+  }
+  return lines.join("\n");
+}

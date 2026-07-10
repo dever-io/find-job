@@ -18,3 +18,15 @@ export function actionKeyboard(vacancyId: string, url: string): InlineKeyboard {
 export function openKeyboard(url: string): InlineKeyboard {
   return new InlineKeyboard().url("📄 Открыть вакансию", url);
 }
+
+/** Кнопки под черновиком сопроводительного письма (Фаза 3). */
+export function letterKeyboard(vacancyId: string, url: string): InlineKeyboard {
+  return new InlineKeyboard()
+    .text("✅ Отправить", `l:send:${vacancyId}`)
+    .text("✏️ Редактировать", `l:edit:${vacancyId}`)
+    .row()
+    .text("✂️ Короче", `l:shorter:${vacancyId}`)
+    .text("🎩 Официальнее", `l:formal:${vacancyId}`)
+    .row()
+    .url("📄 Открыть вакансию", url);
+}

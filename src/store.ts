@@ -115,6 +115,21 @@ class Store {
     return v;
   }
 
+  /** Сохранить текст письма и (опц.) координаты сообщения-черновика. */
+  async setLetter(
+    id: string,
+    letter: string,
+    coords?: { messageId?: number; threadId?: number },
+  ): Promise<StoredVacancy | undefined> {
+    const v = this.db.vacancies[id];
+    if (!v) return undefined;
+    v.letter = letter;
+    if (coords?.messageId !== undefined) v.letterMessageId = coords.messageId;
+    if (coords?.threadId !== undefined) v.letterThreadId = coords.threadId;
+    await this.flush();
+    return v;
+  }
+
   allVacancies(): StoredVacancy[] {
     return Object.values(this.db.vacancies);
   }
