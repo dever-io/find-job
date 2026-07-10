@@ -1,9 +1,10 @@
 import type { Bot } from "grammy";
 import type { BotContext } from "../toolkit.js";
-import type { Session, TrackId } from "../types.js";
+import type { Session, Status, TrackId } from "../types.js";
 import { store } from "../store.js";
 import type { TopicKey } from "../store.js";
 import { runAll, runTrack } from "../jobs/run.js";
+import { postDigest } from "../jobs/digest.js";
 import { TRACKS, TRACK_IDS } from "../tracks/index.js";
 import { statusLabel } from "../format.js";
 
@@ -31,7 +32,8 @@ function helpText(): string {
     "",
     "<b>Команды:</b>",
     "/run — искать по обоим трекам сейчас (<code>/run A</code> — только трек A)",
-    "/status — привязки топиков и воронка",
+    "/status — привязки топиков и воронка по трекам",
+    "/digest — аналитика за неделю в топик «Аналитика»",
     "/help — эта справка",
     "",
     `Трек A: ${TRACKS.A.title}`,
@@ -94,6 +96,18 @@ export function registerCommands(bot: Bot<Ctx>): void {
     await ctx.reply(`Готово: ${TRACK_IDS.map((t) => `${t}=${res[t] ?? 0}`).join(", ")}`);
   });
 
+  // Ручной дайджест в топик «Аналитика».
+  bot.command("digest", async (ctx) => {
+    if (!store.meta.groupId) {
+      await ctx.reply("Сначала привяжи топики: см. /help.");
+      return;
+    }
+    const ok = await postDigest(ctx.api);
+    if (ok && store.threadId("digest") === undefined) {
+      await ctx.reply("⚠️ Топик «Аналитика» не привязан (/bind digest) — отправил в General.");
+    }
+  });
+
   // Статус: привязки + воронка.
   bot.command("status", async (ctx) => {
     const m = store.meta;
@@ -105,14 +119,20 @@ export function registerCommands(bot: Bot<Ctx>): void {
     );
 
     const all = store.allVacancies();
-    const byStatus = new Map<string, number>();
-    for (const v of all) byStatus.set(v.status, (byStatus.get(v.status) ?? 0) + 1);
     lines.push("");
     lines.push(`Вакансий в истории: <b>${all.length}</b>`);
-    if (byStatus.size) {
-      lines.push(
-        [...byStatus.entries()].map(([s, n]) => `${statusLabel(s)}: ${n}`).join("\n"),
-      );
+
+    // Воронка по трекам.
+    const ORDER: Status[] = ["Viewed", "Saved", "Responded", "Interview", "Offer", "Rejected", "Ignored"];
+    for (const t of TRACK_IDS) {
+      const rows = all.filter((v) => v.track === t);
+      if (!rows.length) continue;
+      const by = new Map<Status, number>();
+      for (const v of rows) by.set(v.status, (by.get(v.status) ?? 0) + 1);
+      const parts = ORDER.filter((s) => by.has(s)).map((s) => `${statusLabel(s)}: ${by.get(s)}`);
+      lines.push("");
+      lines.push(`<b>Трек ${t}</b> (${rows.length})`);
+      lines.push(parts.join("\n"));
     }
     await ctx.reply(lines.join("\n"), { parse_mode: "HTML" });
   });
@@ -121,6 +141,7 @@ export function registerCommands(bot: Bot<Ctx>): void {
     .setMyCommands([
       { command: "run", description: "Искать вакансии сейчас" },
       { command: "status", description: "Статус и воронка" },
+      { command: "digest", description: "Собрать аналитику за неделю" },
       { command: "bind", description: "Привязать текущий топик (A/B/inbox/digest)" },
       { command: "help", description: "Как это работает" },
     ])

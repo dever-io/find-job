@@ -3,6 +3,7 @@ import { config } from "./config.js";
 import { store } from "./store.js";
 import { makeBot } from "./bot.js";
 import { runAll, runHotAll } from "./jobs/run.js";
+import { postDigest } from "./jobs/digest.js";
 
 async function main(): Promise<void> {
   if (!config.botToken) {
@@ -33,9 +34,19 @@ async function main(): Promise<void> {
     { timezone: config.cronTz },
   );
 
+  const digest = cron.schedule(
+    config.digestCronExpr,
+    () => {
+      console.log("[cron] weekly digest", new Date().toISOString());
+      postDigest(bot.api).catch((e) => console.error("[cron] digest failed", e));
+    },
+    { timezone: config.cronTz },
+  );
+
   const shutdown = () => {
     daily.stop();
     hot.stop();
+    digest.stop();
     bot.stop();
   };
   process.once("SIGINT", shutdown);

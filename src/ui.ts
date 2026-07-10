@@ -1,4 +1,5 @@
 import { InlineKeyboard } from "grammy";
+import type { Status } from "./types.js";
 
 /**
  * Кнопки под карточкой вакансии.
@@ -17,6 +18,25 @@ export function actionKeyboard(vacancyId: string, url: string): InlineKeyboard {
 /** Клавиатура после действия — оставляем только ссылку на вакансию. */
 export function openKeyboard(url: string): InlineKeyboard {
   return new InlineKeyboard().url("📄 Открыть вакансию", url);
+}
+
+/**
+ * Клавиатура продвижения по воронке. Показывает доступные из текущего статуса
+ * переходы; в терминальных статусах — только ссылка на вакансию.
+ * callback_data: `s:<status>:<vacancyId>`.
+ */
+export function statusKeyboard(status: Status, vacancyId: string, url: string): InlineKeyboard {
+  const kb = new InlineKeyboard();
+  const next: Array<[string, Status]> =
+    status === "Responded"
+      ? [["🗣 Собеседование", "Interview"], ["🚫 Отказ", "Rejected"]]
+      : status === "Interview"
+        ? [["🎉 Оффер", "Offer"], ["🚫 Отказ", "Rejected"]]
+        : [];
+  for (const [label, s] of next) kb.text(label, `s:${s}:${vacancyId}`);
+  if (next.length) kb.row();
+  kb.url("📄 Открыть вакансию", url);
+  return kb;
 }
 
 /** Кнопки под черновиком сопроводительного письма (Фаза 3). */

@@ -3,7 +3,7 @@ import type { BotContext } from "../toolkit.js";
 import type { Session, Status, StoredVacancy } from "../types.js";
 import { store } from "../store.js";
 import { vacancyCard, statusLabel, letterCard } from "../format.js";
-import { openKeyboard, letterKeyboard } from "../ui.js";
+import { openKeyboard, letterKeyboard, statusKeyboard } from "../ui.js";
 import { generateLetter, type LetterOpts } from "../ai/letter.js";
 import { getTrack } from "../tracks/index.js";
 
@@ -146,17 +146,42 @@ export function registerActions(bot: Bot<Ctx>): void {
         reply_markup: openKeyboard(rec.vacancy.url),
       })
       .catch(() => {});
-    // Обновляем и саму карточку вакансии, если знаем её сообщение.
+    // Обновляем и саму карточку вакансии: статус + клавиатура продвижения воронки.
     if (rec.cardMessageId !== undefined && store.meta.groupId) {
       await ctx.api
         .editMessageText(
           store.meta.groupId,
           rec.cardMessageId,
           vacancyCard(rec.vacancy, rec.verdict, { track: rec.track, hot: rec.hot, statusLine: statusLabel("Responded") }),
-          { parse_mode: "HTML", link_preview_options: { is_disabled: true }, reply_markup: openKeyboard(rec.vacancy.url) },
+          {
+            parse_mode: "HTML",
+            link_preview_options: { is_disabled: true },
+            reply_markup: statusKeyboard("Responded", rec.vacancy.id, rec.vacancy.url),
+          },
         )
         .catch(() => {});
     }
+  });
+
+  // ── Продвижение по воронке: Собеседование / Оффер / Отказ ──
+  bot.callbackQuery(/^s:(Interview|Offer|Rejected):(.+)$/, async (ctx) => {
+    const [, status, id] = ctx.match as RegExpMatchArray;
+    const rec = await store.setStatus(id, status as Status);
+    if (!rec) {
+      await ctx.answerCallbackQuery({ text: "Вакансия не найдена." });
+      return;
+    }
+    await ctx.answerCallbackQuery({ text: statusLabel(status) });
+    await ctx
+      .editMessageText(
+        vacancyCard(rec.vacancy, rec.verdict, { track: rec.track, hot: rec.hot, statusLine: statusLabel(status) }),
+        {
+          parse_mode: "HTML",
+          link_preview_options: { is_disabled: true },
+          reply_markup: statusKeyboard(status as Status, rec.vacancy.id, rec.vacancy.url),
+        },
+      )
+      .catch(() => {});
   });
 
   // ── Правка письма свободным текстом (нужен выключенный privacy mode) ──
