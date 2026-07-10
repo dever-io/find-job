@@ -53,15 +53,21 @@ export interface Vacancy {
   publishedAt?: string; // ISO
   snippet?: string;
   description?: string; // полное описание (добор через detail-endpoint)
+  keySkills?: string[]; // ключевые навыки из карточки вакансии (hh key_skills)
+  experienceName?: string; // требуемый опыт словами (напр. «3–6 лет»)
 }
 
 /** Вердикт ИИ (или эвристики) о соответствии вакансии треку. */
 export interface VerifyResult {
   vacancyId: string;
   relevant: boolean;
-  score: number; // 0..100
-  reason: string;
+  score: number; // 0..100 — взвешенный по весам трека
+  reason: string; // краткое резюме одной строкой
   model: string;
+  /** Аргументы «за» (почему подходит) — для богатой карточки. */
+  matchReasons?: string[];
+  /** Аргументы «против» (несоответствия/риски). */
+  mismatchReasons?: string[];
 }
 
 /** Статусы вакансии/отклика в воронке. */

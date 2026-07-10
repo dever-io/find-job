@@ -1,37 +1,43 @@
 /**
  * Локальная проверка поиска + ИИ без Telegram.
  * Запуск:  npm run try:search -- A
- *          npm run try:search -- "product manager"   (произвольные ключевые слова)
+ *          npm run try:search -- B
+ * (произвольные ключевые слова прогоняются через профиль трека A)
  */
-import { searchAll } from "../sources/index.js";
-import { verifyMany } from "../ai/verify.js";
+import { searchAll, enrichDetails } from "../sources/index.js";
+import { analyzeMany } from "../ai/analyze.js";
 import { fmtMoney } from "../format.js";
 import { config } from "../config.js";
 import { TRACKS } from "../tracks/index.js";
-import type { SearchQuery, TrackId } from "../types.js";
+import type { TrackConfig, TrackId } from "../types.js";
 
 const arg = process.argv.slice(2).join(" ").trim();
-let q: SearchQuery;
+let track: TrackConfig;
 if (arg === "A" || arg === "B") {
-  q = TRACKS[arg as TrackId].query;
+  track = TRACKS[arg as TrackId];
+} else if (arg) {
+  track = { ...TRACKS.A, query: { ...TRACKS.A.query, keywords: arg } };
 } else {
-  q = { keywords: arg || TRACKS.A.query.keywords, areaId: "113", areaName: "Россия" };
+  track = TRACKS.A;
 }
 
-console.log(`\n🔎 Ищу: "${q.keywords}" (${q.areaName})`);
-console.log(`ИИ: ${config.openRouterKey ? "OpenRouter" : "эвристика (нет OPENROUTER_API_KEY)"}\n`);
+console.log(`\n🔎 ${track.title}`);
+console.log(`Ищу: "${track.query.keywords}" (${track.query.areaName})`);
+console.log(`ИИ: ${config.openRouterKey ? "OpenRouter (взвешенный скор)" : "эвристика (нет OPENROUTER_API_KEY)"}\n`);
 
-const raw = await searchAll(q, { limit: 20, periodDays: 14 });
-console.log(`Источники вернули ${raw.length} вакансий. Проверяю первые 6…\n`);
+const raw = await searchAll(track.query, { limit: 20, periodDays: 14 });
+console.log(`Источники вернули ${raw.length} вакансий. Разбираю первые 6…\n`);
 
 const sample = raw.slice(0, 6);
-const verdicts = await verifyMany(q, sample);
+await enrichDetails(sample);
+const verdicts = await analyzeMany(track, sample);
 
 sample.forEach((v, i) => {
   const vd = verdicts[i];
   console.log(`${vd.score}/100 [${vd.model}]  ${v.title}`);
   console.log(`   ${v.company ?? "—"} · ${v.area ?? "—"} · ${fmtMoney(v.salaryFrom, v.salaryTo, v.currency)}`);
-  console.log(`   ${vd.reason}`);
+  if (vd.matchReasons?.length) console.log(`   ✅ ${vd.matchReasons.join("; ")}`);
+  if (vd.mismatchReasons?.length) console.log(`   ⚠️ ${vd.mismatchReasons.join("; ")}`);
   console.log(`   ${v.url}\n`);
 });
 

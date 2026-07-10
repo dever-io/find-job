@@ -65,8 +65,11 @@ export function vacancyCard(v: Vacancy, verdict?: VerifyResult, opts: CardOpts =
   if (v.area) meta.push("📍 " + escapeHtml(v.area));
   if (meta.length) lines.push(meta.join(" · "));
   lines.push("💰 " + escapeHtml(fmtMoney(v.salaryFrom, v.salaryTo, v.currency)));
+  if (v.experienceName) lines.push("🧭 " + escapeHtml(v.experienceName));
   if (verdict) {
     lines.push(`${scoreEmoji(verdict.score)} <b>${verdict.score}/100</b> — ${escapeHtml(verdict.reason)}`);
+    for (const r of (verdict.matchReasons ?? []).slice(0, 3)) lines.push("✅ " + escapeHtml(r));
+    for (const r of (verdict.mismatchReasons ?? []).slice(0, 2)) lines.push("⚠️ " + escapeHtml(r));
   }
   lines.push(`<i>Источник: ${escapeHtml(SRC_LABEL[v.source] ?? v.source)}</i>`);
   if (opts.statusLine) lines.push(`\n${opts.statusLine}`);

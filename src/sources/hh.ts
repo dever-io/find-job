@@ -12,6 +12,39 @@ function stripHl(s: string): string {
   return s.replace(/<\/?highlighttext>/g, "");
 }
 
+/** HTML-описание вакансии → плоский текст (теги вон, сущности назад, пробелы схлопнуты). */
+function htmlToText(html: string): string {
+  return html
+    .replace(/<\/(p|li|ul|ol|div|br|h[1-6])>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;|&#39;/g, "'")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/**
+ * Добор деталей вакансии hh: GET /vacancies/{id} → полное описание, ключевые
+ * навыки, требуемый опыт. Принимает нативный id ("12345"), а не "hh:12345".
+ */
+export async function hhDetail(
+  nativeId: string,
+): Promise<{ description?: string; keySkills?: string[]; experienceName?: string }> {
+  const data = await fetchJson(`${config.hhApiBase}/vacancies/${nativeId}`, { headers: HH_HEADERS });
+  return {
+    description: typeof data?.description === "string" ? htmlToText(data.description) : undefined,
+    keySkills: Array.isArray(data?.key_skills)
+      ? data.key_skills.map((k: any) => k?.name).filter((s: any): s is string => Boolean(s))
+      : undefined,
+    experienceName: data?.experience?.name ?? undefined,
+  };
+}
+
 /**
  * HeadHunter — публичный API api.hh.ru/vacancies, без ключа.
  * Документация фильтров: https://api.hh.ru/openapi/redoc#tag/Poisk-vakansij

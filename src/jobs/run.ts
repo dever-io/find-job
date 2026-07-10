@@ -24,7 +24,7 @@ export async function runTrack(api: Api, trackId: TrackId): Promise<number> {
     return 0;
   }
 
-  const matches = await findMatches(track.query, {
+  const matches = await findMatches(track, {
     excludeIds: store.seenSet(trackId),
     periodDays: 3,
   });
