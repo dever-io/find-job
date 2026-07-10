@@ -19,12 +19,9 @@ function helpText(): string {
     "Ищет вакансии по двум трекам, оценивает через ИИ и постит в топики этой группы.",
     "",
     "<b>Настройка (один раз):</b>",
-    "1. Создай в этой супергруппе топики (Темы): для трека A, трека B, «Отклики», «Аналитика».",
-    "2. Зайди в нужный топик и выполни там команду привязки:",
-    "   • <code>/bind A</code> — топик трека A",
-    "   • <code>/bind B</code> — топик трека B",
-    "   • <code>/bind inbox</code> — топик откликов/переписки",
-    "   • <code>/bind digest</code> — топик аналитики",
+    "Просто напиши <code>/setup</code> — я сам создам 4 темы (Track A, Track B, «Отклики», «Аналитика») и привяжу их.",
+    "Работает прямо здесь, в личке (нужен включённый Threaded Mode у @BotFather), либо в супергруппе с Темами.",
+    "Если предпочитаешь вручную — зайди в тему и выполни <code>/bind A</code> / <code>B</code> / <code>inbox</code> / <code>digest</code>.",
     "",
     "<b>Как отвечать на вакансию:</b>",
     "Под карточкой — кнопки. 👍 <b>Откликнуться</b> генерит сопроводительное письмо в топик «Отклики»; там его можно сделать <i>короче/официальнее</i>, править текстом (пришли сообщение) или зафиксировать кнопкой ✅.",
@@ -49,7 +46,47 @@ export function registerCommands(bot: Bot<Ctx>): void {
     await ctx.reply(helpText(), { parse_mode: "HTML", link_preview_options: { is_disabled: true } });
   });
 
-  // Привязка топика: выполняется ВНУТРИ нужного топика.
+  // Авто-настройка: бот сам создаёт 4 темы и привязывает их.
+  // Работает в личке (Threaded Mode) или в супергруппе с Темами.
+  bot.command("setup", async (ctx) => {
+    const chat = ctx.chat!;
+    if (chat.type !== "private" && chat.type !== "supergroup") {
+      await ctx.reply("Запусти /setup в личке со мной (включи Threaded Mode у @BotFather) или в супергруппе с Темами.");
+      return;
+    }
+    // В личке первый /setup ловит владельца.
+    if (chat.type === "private" && ctx.from && store.meta.ownerId === undefined) {
+      await store.setOwner(ctx.from.id);
+    }
+
+    const TOPICS: Array<{ key: TopicKey; name: string }> = [
+      { key: "A", name: "Track A · Продакшн" },
+      { key: "B", name: "Track B · IT PM" },
+      { key: "inbox", name: "Отклики" },
+      { key: "digest", name: "Аналитика" },
+    ];
+    const report: string[] = [];
+    for (const t of TOPICS) {
+      // Уже привязана — не плодим дубликаты.
+      if (store.threadId(t.key) !== undefined) {
+        report.push(`• ${t.name} — уже привязана`);
+        continue;
+      }
+      try {
+        const topic = await ctx.api.createForumTopic(chat.id, t.name);
+        await store.bindTopic(t.key, chat.id, topic.message_thread_id);
+        report.push(`• ${t.name} ✅`);
+      } catch (e: any) {
+        report.push(`• ${t.name} — ошибка: ${e?.description ?? e?.message ?? e}`);
+      }
+    }
+    await ctx.reply(
+      ["<b>Настройка тем</b>", ...report, "", "Готово. Дальше — задай OPENROUTER_API_KEY и жми /run."].join("\n"),
+      { parse_mode: "HTML" },
+    );
+  });
+
+  // Привязка топика вручную: выполняется ВНУТРИ нужного топика.
   bot.command("bind", async (ctx) => {
     const arg = (ctx.match ?? "").trim().toLowerCase();
     const key = VALID_TOPIC.find((k) => k.toLowerCase() === arg);
@@ -139,10 +176,11 @@ export function registerCommands(bot: Bot<Ctx>): void {
 
   bot.api
     .setMyCommands([
+      { command: "setup", description: "Создать и привязать темы автоматически" },
       { command: "run", description: "Искать вакансии сейчас" },
       { command: "status", description: "Статус и воронка" },
       { command: "digest", description: "Собрать аналитику за неделю" },
-      { command: "bind", description: "Привязать текущий топик (A/B/inbox/digest)" },
+      { command: "bind", description: "Привязать текущую тему вручную (A/B/inbox/digest)" },
       { command: "help", description: "Как это работает" },
     ])
     .catch((e) => console.warn("[setMyCommands]", e?.message ?? e));

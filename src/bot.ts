@@ -1,5 +1,6 @@
 import { createBot, type BotContext } from "./toolkit.js";
 import { config } from "./config.js";
+import { store } from "./store.js";
 import type { Session } from "./types.js";
 import { registerCommands } from "./handlers/commands.js";
 import { registerActions } from "./handlers/actions.js";
@@ -16,8 +17,10 @@ export function makeBot() {
   });
 
   // Owner-guard: команды/кнопки принимаем только от владельца.
+  // Владелец = OWNER_ID из env, либо пойманный в рантайме через /setup (store).
   bot.use(async (ctx, next) => {
-    if (config.ownerId && ctx.from && ctx.from.id !== config.ownerId) return; // молча игнорируем чужих
+    const owner = config.ownerId ?? store.meta.ownerId;
+    if (owner && ctx.from && ctx.from.id !== owner) return; // молча игнорируем чужих
     await next();
   });
 

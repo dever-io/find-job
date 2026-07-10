@@ -9,6 +9,8 @@ export type TopicKey = TrackId | "inbox" | "digest";
 
 interface Meta {
   groupId?: number;
+  /** Владелец, пойманный в рантайме (fallback к config.ownerId, если env пуст). */
+  ownerId?: number;
   topics: Partial<Record<TopicKey, number>>;
 }
 
@@ -71,6 +73,12 @@ class Store {
   async bindTopic(key: TopicKey, groupId: number, threadId?: number): Promise<void> {
     this.db.meta.groupId = groupId;
     if (threadId !== undefined) this.db.meta.topics[key] = threadId;
+    await this.flush();
+  }
+
+  /** Запомнить владельца (первая привязка в личке), если ещё не задан. */
+  async setOwner(id: number): Promise<void> {
+    this.db.meta.ownerId = id;
     await this.flush();
   }
 
