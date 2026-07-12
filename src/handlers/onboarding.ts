@@ -2,6 +2,7 @@ import { type Bot, InlineKeyboard } from "grammy";
 import type { BotContext } from "../toolkit.js";
 import type { Session, TrackConfig } from "../types.js";
 import { store } from "../store.js";
+import { config } from "../config.js";
 import { escapeHtml } from "../format.js";
 import { buildTrackA, buildTrackB } from "../tracks/index.js";
 import { deriveResumeTrack, deriveTargetTrack } from "../ai/derive.js";
@@ -46,11 +47,14 @@ async function handleResume(ctx: Ctx, resume: string): Promise<void> {
     const track = buildTrackA({ title: t.title, keywords: t.keywords, experience: t.experience, tag: t.tag, resume });
     await store.setTrack(track);
     await askOnlyOrMore(ctx, track);
-  } catch {
-    // Нет ИИ-ключа или сбой — спросим ключевые слова вручную.
+  } catch (e: any) {
+    // Различаем «нет ключа» и «ИИ не ответил» (напр. модели недоступны) — иначе
+    // сообщение вводит в заблуждение. Реальную причину пишем в лог.
+    console.warn("[onboarding] deriveResumeTrack failed:", e?.message ?? e);
     ctx.session.awaiting = { kind: "onb_keywords_a" };
+    const why = config.openRouterKey ? "ИИ-подбор временно недоступен" : "нужен OPENROUTER_API_KEY";
     await ctx.reply(
-      "Не смог определить автоматически (нужен OPENROUTER_API_KEY). Напиши поисковый запрос под своё резюме — роль/специализацию, напр. «руководитель проектов продакшн».",
+      `Не смог определить автоматически (${why}). Напиши поисковый запрос под своё резюме — роль/специализацию, напр. «руководитель проектов продакшн».`,
     );
   }
 }

@@ -15,10 +15,11 @@ export const config = {
 
   openRouterKey: env.OPENROUTER_API_KEY ?? "",
   openRouterUrl: env.OPENROUTER_URL ?? "https://openrouter.ai/api/v1/chat/completions",
-  // Модели для скоринга вакансий: перебор с фолбэком (бесплатные по умолчанию).
+  // Модели для скоринга вакансий: перебор с фолбэком. Дешёвые платные слаги —
+  // free-версии OpenRouter отключил (404/429), см. project-hh-access контекст.
   scoreModels: (
     env.OPENROUTER_SCORE_MODELS ??
-    "deepseek/deepseek-chat-v3-0324:free,meta-llama/llama-3.3-70b-instruct:free,google/gemini-2.0-flash-exp:free,qwen/qwen-2.5-72b-instruct:free"
+    "deepseek/deepseek-chat-v3-0324,meta-llama/llama-3.3-70b-instruct"
   )
     .split(",")
     .map((s) => s.trim())
