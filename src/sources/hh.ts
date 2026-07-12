@@ -1,4 +1,4 @@
-import { fetchJson, fetchText, type JobSource, type SearchOpts } from "./base.js";
+import { fetchJson, type JobSource, type SearchOpts } from "./base.js";
 import { config } from "../config.js";
 import type { SearchQuery, Vacancy } from "../types.js";
 
@@ -10,12 +10,89 @@ const HH_HEADERS: Record<string, string> = {
   ...(config.hhAccessToken ? { Authorization: `Bearer ${config.hhAccessToken}` } : {}),
 };
 
-/** Заголовки для скрапинга сайта (браузерный UA + опц. секрет прокси). */
-function webHeaders(): Record<string, string> {
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+// ── Устойчивый фетчер для скрапинга: cookie-jar + ретраи + пейсинг ──
+// DDoS-Guard перед hh.ru «флаппит»: тот же URL то 200, то 403. Ответы (в т.ч. 403)
+// ставят куки __ddg*; переиспользование их + ретрай почти всегда пробивает.
+
+/** Cookie-jar для hh.ru (имя → значение). Наполняется из Set-Cookie. */
+const hhCookies = new Map<string, string>();
+function cookieHeader(): string {
+  return [...hhCookies].map(([k, v]) => `${k}=${v}`).join("; ");
+}
+function storeSetCookies(res: Response): void {
+  const list: string[] = (res.headers as any).getSetCookie?.() ?? [];
+  for (const c of list) {
+    const pair = c.split(";")[0];
+    const eq = pair.indexOf("=");
+    if (eq > 0) hhCookies.set(pair.slice(0, eq).trim(), pair.slice(eq + 1).trim());
+  }
+}
+
+/** Браузерные заголовки + накопленные куки — чтобы выглядеть как реальный клиент. */
+function browserHeaders(): Record<string, string> {
   return {
     "User-Agent": config.hhWebUserAgent,
+    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8",
+    "Upgrade-Insecure-Requests": "1",
     ...(config.hhProxyKey ? { "X-Proxy-Key": config.hhProxyKey } : {}),
+    ...(hhCookies.size ? { Cookie: cookieHeader() } : {}),
   };
+}
+
+// Сериализуем запросы к hh.ru с паузой — убираем «залп» (enrichDetails × N воркеров).
+let hhChain: Promise<unknown> = Promise.resolve();
+function paced<T>(task: () => Promise<T>): Promise<T> {
+  const run = hhChain.then(task, task);
+  hhChain = run.then(
+    () => sleep(config.hhScrapeGapMs),
+    () => sleep(config.hhScrapeGapMs),
+  );
+  return run;
+}
+
+let hhWarmed = false;
+/** Прогрев: один GET главной, чтобы засеять cookie-jar (__ddg* и пр.) до поиска. */
+async function warmup(): Promise<void> {
+  if (hhWarmed) return;
+  hhWarmed = true;
+  try {
+    const res = await fetch(`${config.hhWebBase}/`, { headers: browserHeaders() });
+    storeSetCookies(res);
+  } catch {
+    hhWarmed = false; // не вышло — попробуем в следующий раз
+  }
+}
+
+/** Скачивает HTML с hh.ru: прогрев, пейсинг, ретраи на 403/429 с backoff. */
+async function scrapeHtml(url: string): Promise<string> {
+  await warmup();
+  return paced(async () => {
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 20000);
+      try {
+        const res = await fetch(url, { headers: browserHeaders(), signal: ctrl.signal, redirect: "follow" });
+        storeSetCookies(res); // куки берём даже с 403 — они помогают пройти ретрай
+        if (res.status === 403 || res.status === 429) {
+          lastErr = new Error(`HTTP ${res.status} ${url}`);
+          await sleep(700 * (attempt + 1) + Math.floor(Math.random() * 500));
+          continue;
+        }
+        if (!res.ok) throw new Error(`HTTP ${res.status} ${url}`);
+        return await res.text();
+      } catch (e) {
+        lastErr = e;
+        await sleep(500 * (attempt + 1));
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+    throw lastErr ?? new Error(`scrapeHtml: не удалось получить ${url}`);
+  });
 }
 
 /**
@@ -170,10 +247,7 @@ async function hhWebSearch(q: SearchQuery, { limit, periodDays }: SearchOpts): P
   if (q.schedule && q.schedule !== "any") p.set("schedule", q.schedule);
   if (q.employment && q.employment !== "any") p.set("employment", q.employment);
 
-  const html = await fetchText(`${config.hhWebBase}/search/vacancy?${p.toString()}`, {
-    headers: webHeaders(),
-    timeoutMs: 20000,
-  });
+  const html = await scrapeHtml(`${config.hhWebBase}/search/vacancy?${p.toString()}`);
   const st = extractInitialState(html);
   const items: any[] = st?.vacancySearchResult?.vacancies ?? [];
   return items.slice(0, limit).map(mapWebVacancy);
@@ -183,10 +257,7 @@ async function hhWebSearch(q: SearchQuery, { limit, periodDays }: SearchOpts): P
 async function hhWebDetail(
   nativeId: string,
 ): Promise<{ description?: string; keySkills?: string[]; experienceName?: string }> {
-  const html = await fetchText(`${config.hhWebBase}/vacancy/${nativeId}`, {
-    headers: webHeaders(),
-    timeoutMs: 20000,
-  });
+  const html = await scrapeHtml(`${config.hhWebBase}/vacancy/${nativeId}`);
   const st = extractInitialState(html);
   const vv = st?.vacancyView ?? {};
   const rawSkills = vv.keySkills?.keySkill ?? vv.keySkills ?? [];

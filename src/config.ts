@@ -52,6 +52,9 @@ export const config = {
   hhWebUserAgent:
     env.HH_WEB_USER_AGENT ??
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+  // Минимальный интервал между запросами к hh.ru при скрапинге (мс) — чтобы не
+  // ловить наплывы 403 от DDoS-Guard. Запросы сериализуются с этой паузой.
+  hhScrapeGapMs: num(env.HH_SCRAPE_GAP_MS, 500),
 
   cronExpr: env.CRON_EXPR ?? "0 9 * * *",
   cronTz: env.CRON_TZ ?? "Europe/Moscow",
