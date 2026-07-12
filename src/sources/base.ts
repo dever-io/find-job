@@ -34,3 +34,26 @@ export async function fetchJson(
     clearTimeout(timer);
   }
 }
+
+/** Как fetchJson, но возвращает сырой текст (HTML) — для скрапинга страниц. */
+export async function fetchText(
+  url: string,
+  opts: { timeoutMs?: number; headers?: Record<string, string> } = {},
+): Promise<string> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), opts.timeoutMs ?? 15000);
+  try {
+    const res = await fetch(url, {
+      signal: ctrl.signal,
+      headers: {
+        Accept: "text/html,application/xhtml+xml",
+        "Accept-Language": "ru,en;q=0.9",
+        ...opts.headers,
+      },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status} ${url}`);
+    return await res.text();
+  } finally {
+    clearTimeout(timer);
+  }
+}

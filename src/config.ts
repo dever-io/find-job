@@ -40,6 +40,17 @@ export const config = {
   // Access token приложения HH (dev.hh.ru/admin). Авторизованный доступ обходит
   // блокировку анонимных дата-центровых IP (Selectel/облака).
   hhAccessToken: env.HH_ACCESS_TOKEN ?? "",
+  // Источник данных HH:
+  //   "api"    — официальный api.hh.ru (требует HH_ACCESS_TOKEN, иначе 403/капча);
+  //   "scrape" — парсинг SSR-стейта сайта hh.ru (без токена);
+  //   "auto"   — есть токен → api, нет → scrape.
+  hhMode: (env.HH_MODE ?? "auto") as "api" | "scrape" | "auto",
+  // База для скрапинга сайта (можно указать RU-прокси сайта, если ДЦ-IP режется).
+  hhWebBase: (env.HH_WEB_BASE ?? "https://hh.ru").replace(/\/+$/, ""),
+  // Браузерный User-Agent для скрапинга (сайт ждёт браузер, а не "AppName/ver").
+  hhWebUserAgent:
+    env.HH_WEB_USER_AGENT ??
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
 
   cronExpr: env.CRON_EXPR ?? "0 9 * * *",
   cronTz: env.CRON_TZ ?? "Europe/Moscow",
