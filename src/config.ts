@@ -15,6 +15,10 @@ export const config = {
 
   openRouterKey: env.OPENROUTER_API_KEY ?? "",
   openRouterUrl: env.OPENROUTER_URL ?? "https://openrouter.ai/api/v1/chat/completions",
+  // OpenRouter гео-блокирует РФ-IP (403). Если бот работает с РФ-IP (дома), можно
+  // туннелировать ТОЛЬКО запросы к OpenRouter через не-РФ прокси (напр. SSH -D на
+  // свой сервер): OPENROUTER_PROXY=socks5h://127.0.0.1:1080. HH при этом идёт напрямую.
+  openRouterProxy: env.OPENROUTER_PROXY ?? "",
   // Модели для скоринга вакансий: перебор с фолбэком. Дешёвые платные слаги —
   // free-версии OpenRouter отключил (404/429), см. project-hh-access контекст.
   scoreModels: (

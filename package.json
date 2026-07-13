@@ -18,7 +18,8 @@
     "dotenv": "^16.4.7",
     "grammy": "^1.30.0",
     "node-cron": "^3.0.3",
-    "pdf-parse": "^1.1.1"
+    "pdf-parse": "^1.1.1",
+    "socks-proxy-agent": "^10.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
