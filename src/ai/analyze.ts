@@ -19,6 +19,31 @@ interface Analysis {
   factors: Record<Factor, number>; // 0..100 по каждому фактору
   matchReasons: string[];
   mismatchReasons: string[];
+  responsibilities: string[];
+}
+
+/** Достаёт список обязанностей из текста описания (фолбэк без ИИ). */
+export function extractResponsibilities(text: string): string[] {
+  const lines = text
+    .split("\n")
+    .map((s) => s.replace(/^[•\-–—*·●▪●•\s]+/, "").trim())
+    .filter(Boolean);
+  const startRe =
+    /^(обязанност|чем предстоит|что предстоит|что нужно делать|ваши задачи|основные задачи|задачи|что делать|вы будете|функционал|зона ответственности)/i;
+  const stopRe =
+    /^(требовани|мы ожидаем|ожидани|что мы ждём|наши требовани|услови|мы предлагаем|что мы предлагаем|бонус|о компании|будет плюсом|пожелани|навыки|что мы даём|наш стек)/i;
+  let capturing = false;
+  const items: string[] = [];
+  for (const line of lines) {
+    if (!capturing) {
+      if (startRe.test(line)) capturing = true;
+      continue;
+    }
+    if (stopRe.test(line)) break;
+    if (line.length > 3) items.push(line.slice(0, 160));
+    if (items.length >= 8) break;
+  }
+  return items.slice(0, 6);
 }
 
 const SYSTEM =
@@ -48,10 +73,12 @@ function buildPrompt(track: TrackConfig, v: Vacancy): string {
     `РЕЗЮМЕ КАНДИДАТА:\n${track.resumeProfile}\n` +
     transfer +
     `\nВАКАНСИЯ:\n${vac}\n\n` +
-    `Оцени соответствие по каждому фактору 0..100 и приведи по 1–4 коротких аргумента ` +
-    `«за» и «против» (по-русски, по существу). Верни строго JSON:\n` +
+    `Оцени соответствие по каждому фактору 0..100, приведи по 1–4 коротких аргумента ` +
+    `«за» и «против», и выпиши 3–6 ключевых ОБЯЗАННОСТЕЙ из описания вакансии ` +
+    `(короткими пунктами, дословно по смыслу, без воды). Всё по-русски. Верни строго JSON:\n` +
     `{\n"factors": {\n${factorList}\n},\n` +
-    `"match": ["аргумент за", ...],\n"mismatch": ["аргумент против", ...]\n}`
+    `"match": ["аргумент за", ...],\n"mismatch": ["аргумент против", ...],\n` +
+    `"responsibilities": ["обязанность", ...]\n}`
   );
 }
 
@@ -73,9 +100,14 @@ function parse(text: string): Analysis | null {
       factors[f] = clamp(src[f]);
     }
     if (!any) return null;
-    const toArr = (x: unknown): string[] =>
-      Array.isArray(x) ? x.map((s) => String(s).trim()).filter(Boolean).slice(0, 4) : [];
-    return { factors, matchReasons: toArr(o.match), mismatchReasons: toArr(o.mismatch) };
+    const toArr = (x: unknown, n = 4): string[] =>
+      Array.isArray(x) ? x.map((s) => String(s).trim()).filter(Boolean).slice(0, n) : [];
+    return {
+      factors,
+      matchReasons: toArr(o.match),
+      mismatchReasons: toArr(o.mismatch),
+      responsibilities: toArr(o.responsibilities, 6),
+    };
   } catch {
     return null;
   }
@@ -112,6 +144,7 @@ function heuristic(track: TrackConfig, v: Vacancy): VerifyResult {
     score,
     reason: `Совпадение по ключевым словам: ${hits}/${toks.length || 0}`,
     model: "эвристика",
+    responsibilities: extractResponsibilities(v.description || v.snippet || ""),
   };
 }
 
@@ -131,7 +164,7 @@ export async function analyzeOne(track: TrackConfig, v: Vacancy): Promise<Verify
           model,
           system: SYSTEM,
           user: buildPrompt(track, v),
-          maxTokens: 600,
+          maxTokens: 800,
         });
         const a = parse(text);
         if (a) {
@@ -144,6 +177,9 @@ export async function analyzeOne(track: TrackConfig, v: Vacancy): Promise<Verify
             reason: summarize(a, score),
             matchReasons: a.matchReasons,
             mismatchReasons: a.mismatchReasons,
+            responsibilities: a.responsibilities.length
+              ? a.responsibilities
+              : extractResponsibilities(v.description || v.snippet || ""),
           };
         }
       } catch (e: any) {

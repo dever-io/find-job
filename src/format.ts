@@ -97,10 +97,17 @@ export function vacancyCard(v: Vacancy, verdict?: VerifyResult, opts: CardOpts =
     for (const r of cons) lines.push("⚠️ " + escapeHtml(r));
   }
 
-  const desc = shortDesc(v);
-  if (desc) {
+  const duties = (verdict?.responsibilities ?? []).slice(0, 6);
+  if (duties.length) {
     lines.push("");
-    lines.push(`<i>${escapeHtml(desc)}</i>`);
+    lines.push("<b>Обязанности:</b>");
+    for (const d of duties) lines.push("• " + escapeHtml(d));
+  } else {
+    const desc = shortDesc(v);
+    if (desc) {
+      lines.push("");
+      lines.push(`<i>${escapeHtml(desc)}</i>`);
+    }
   }
 
   lines.push("");

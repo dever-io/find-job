@@ -70,6 +70,8 @@ export interface VerifyResult {
   matchReasons?: string[];
   /** Аргументы «против» (несоответствия/риски). */
   mismatchReasons?: string[];
+  /** Ключевые обязанности из вакансии — списком в карточку. */
+  responsibilities?: string[];
 }
 
 /** Статусы вакансии/отклика в воронке. */
