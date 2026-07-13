@@ -109,6 +109,18 @@ function stripHl(s: string): string {
   return s.replace(/<\/?highlighttext>/g, "");
 }
 
+/**
+ * Ключевые слова → HH-синтаксис поиска. LLM отдаёт список через запятую, но HH
+ * трактует запятые как AND (нужны ВСЕ слова) → 0 результатов. Превращаем в OR,
+ * многословные фразы берём в кавычки. Если запятых нет — отдаём как есть
+ * (сохраняя уже готовые OR/AND-запросы).
+ */
+function toHhText(keywords: string): string {
+  const parts = keywords.split(",").map((s) => s.trim()).filter(Boolean);
+  if (parts.length <= 1) return keywords.trim();
+  return parts.map((p) => (/\s/.test(p) ? `"${p}"` : p)).join(" OR ");
+}
+
 /** HTML-описание вакансии → плоский текст (теги вон, сущности назад, пробелы схлопнуты). */
 function htmlToText(html: string): string {
   return html
@@ -130,7 +142,7 @@ function htmlToText(html: string): string {
 /** Поиск через api.hh.ru/vacancies. Требует HH_ACCESS_TOKEN, иначе HH отдаёт 403/капчу. */
 async function hhApiSearch(q: SearchQuery, { limit, periodDays }: SearchOpts): Promise<Vacancy[]> {
   const p = new URLSearchParams();
-  p.set("text", q.keywords);
+  p.set("text", toHhText(q.keywords));
   p.set("area", q.areaId || "113");
   p.set("per_page", String(Math.min(limit, 100)));
   p.set("page", "0");
@@ -237,7 +249,7 @@ function mapWebVacancy(v: any): Vacancy {
 /** Поиск через скрапинг hh.ru/search/vacancy. Фильтры — те же query-параметры, что у API. */
 async function hhWebSearch(q: SearchQuery, { limit, periodDays }: SearchOpts): Promise<Vacancy[]> {
   const p = new URLSearchParams();
-  p.set("text", q.keywords);
+  p.set("text", toHhText(q.keywords));
   p.set("area", q.areaId || "113");
   p.set("page", "0");
   p.set("order_by", "publication_time");
