@@ -187,7 +187,9 @@ async function hhApiSearch(q: SearchQuery, { limit, periodDays }: SearchOpts): P
   p.set("order_by", "relevance"); // релевантность > свежести: качество матчей
   p.set("period", String(periodDays ?? 7));
   if (q.salaryFrom) p.set("salary", String(q.salaryFrom));
-  if (q.experience) p.set("experience", q.experience);
+  // Опыт НЕ фильтруем жёстко: сеньор подходит и на роли с меньшим требованием,
+  // а соответствие опыта оценивает ИИ (один из факторов скоринга). Иначе теряем
+  // релевантные вакансии (напр. продюсерских ролей с явным «>6 лет» почти нет).
   if (q.schedule && q.schedule !== "any") p.set("schedule", q.schedule);
   if (q.employment && q.employment !== "any") p.set("employment", q.employment);
 
@@ -293,7 +295,9 @@ async function hhWebSearch(q: SearchQuery, { limit, periodDays }: SearchOpts): P
   p.set("order_by", "relevance"); // релевантность > свежести: качество матчей
   p.set("search_period", String(periodDays ?? 7)); // на сайте период называется search_period (дни)
   if (q.salaryFrom) p.set("salary", String(q.salaryFrom));
-  if (q.experience) p.set("experience", q.experience);
+  // Опыт НЕ фильтруем жёстко: сеньор подходит и на роли с меньшим требованием,
+  // а соответствие опыта оценивает ИИ (один из факторов скоринга). Иначе теряем
+  // релевантные вакансии (напр. продюсерских ролей с явным «>6 лет» почти нет).
   if (q.schedule && q.schedule !== "any") p.set("schedule", q.schedule);
   if (q.employment && q.employment !== "any") p.set("employment", q.employment);
 
