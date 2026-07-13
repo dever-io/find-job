@@ -9,6 +9,8 @@ interface Meta {
   chatId?: number;
   /** Владелец, пойманный в рантайме (fallback к config.ownerId, если env пуст). */
   ownerId?: number;
+  /** Доп. источники — публичные Telegram-каналы (юзернеймы без @). */
+  tgChannels?: string[];
 }
 
 interface DB {
@@ -89,17 +91,53 @@ class Store {
     return this.db.tracks[id];
   }
 
-  /** Настроенные треки по порядку id (A раньше B). */
+  /** Настроенные треки в порядке добавления (A, B, C…). */
   tracks(): TrackConfig[] {
-    return (["A", "B"] as TrackId[]).map((id) => this.db.tracks[id]).filter((t): t is TrackConfig => Boolean(t));
+    return Object.values(this.db.tracks).filter((t): t is TrackConfig => Boolean(t));
   }
 
   hasTracks(): boolean {
     return this.tracks().length > 0;
   }
 
+  /** Следующий свободный id трека: A, B, C, … */
+  nextTrackId(): TrackId {
+    for (let i = 0; i < 26; i++) {
+      const id = String.fromCharCode(65 + i);
+      if (!this.db.tracks[id]) return id;
+    }
+    return `T${Date.now()}`;
+  }
+
   async setTrack(cfg: TrackConfig): Promise<void> {
     this.db.tracks[cfg.id] = cfg;
+    await this.flush();
+  }
+
+  async removeTrack(id: TrackId): Promise<void> {
+    delete this.db.tracks[id];
+    delete this.db.seen[id];
+    await this.flush();
+  }
+
+  // ---- Доп. источники: Telegram-каналы ----
+
+  channels(): string[] {
+    return this.db.meta.tgChannels ?? [];
+  }
+
+  async addChannel(name: string): Promise<void> {
+    const n = name.trim().replace(/^@/, "").toLowerCase();
+    if (!n) return;
+    const list = this.db.meta.tgChannels ?? [];
+    if (!list.includes(n)) list.push(n);
+    this.db.meta.tgChannels = list;
+    await this.flush();
+  }
+
+  async removeChannel(name: string): Promise<void> {
+    const n = name.trim().replace(/^@/, "").toLowerCase();
+    this.db.meta.tgChannels = (this.db.meta.tgChannels ?? []).filter((c) => c !== n);
     await this.flush();
   }
 

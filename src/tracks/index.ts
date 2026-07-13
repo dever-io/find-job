@@ -41,6 +41,7 @@ export interface TrackAInput {
   experience?: Experience;
   resume: string;
   tag?: string; // основа для хэштега (иначе — из title)
+  id?: string; // по умолчанию "A"
 }
 
 export interface TrackBInput {
@@ -49,12 +50,13 @@ export interface TrackBInput {
   transferPrompt: string;
   resume: string;
   tag?: string;
+  id?: string; // по умолчанию "B"
 }
 
 /** Основной трек — прямо по резюме пользователя. */
 export function buildTrackA(input: TrackAInput): TrackConfig {
   return {
-    id: "A",
+    id: input.id ?? "A",
     title: input.title,
     hashtag: toHashtag(input.tag ?? input.title),
     query: { keywords: input.keywords, ...DEFAULT_AREA, experience: input.experience },
@@ -63,10 +65,10 @@ export function buildTrackA(input: TrackAInput): TrackConfig {
   };
 }
 
-/** Второй трек — переход в смежное/другое направление через перенос опыта. */
+/** Доп. трек — направление через перенос опыта (второй и последующие). */
 export function buildTrackB(input: TrackBInput): TrackConfig {
   return {
-    id: "B",
+    id: input.id ?? "B",
     title: input.title,
     hashtag: toHashtag(input.tag ?? input.title),
     query: { keywords: input.keywords, ...DEFAULT_AREA },

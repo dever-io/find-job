@@ -2,8 +2,8 @@ export type Experience = "noExperience" | "between1And3" | "between3And6" | "mor
 export type Schedule = "any" | "remote" | "fullDay" | "flexible";
 export type Employment = "any" | "full" | "part" | "project";
 
-/** Идентификатор трека поиска. */
-export type TrackId = "A" | "B";
+/** Идентификатор трека поиска ("A", "B", "C"…; динамический). */
+export type TrackId = string;
 
 /** Что ищет трек — набор фильтров для источников. */
 export interface SearchQuery {
@@ -105,7 +105,9 @@ export type Awaiting =
   | { kind: "letter_edit"; vacancyId: string }
   | { kind: "onb_resume" } // ждём резюме (PDF или текст)
   | { kind: "onb_keywords_a" } // ждём ключевые слова для трека по резюме (фолбэк без ИИ)
-  | { kind: "onb_track_b" }; // ждём описание второго направления
+  | { kind: "onb_track_b" } // ждём описание второго направления
+  | { kind: "settings_track" } // /настройки → ждём описание нового трека (роль)
+  | { kind: "settings_channel" }; // /настройки → ждём @канал или ссылку t.me
 
 /** Сессия grammY: держит состояние диалога (онбординг, правка письма). */
 export interface Session {

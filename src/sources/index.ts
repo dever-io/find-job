@@ -1,17 +1,25 @@
 import type { JobSource, SearchOpts } from "./base.js";
 import { hhSource, hhDetail } from "./hh.js";
 import { trudvsemSource } from "./trudvsem.js";
+import { tgChannelSource } from "./tg.js";
+import { store } from "../store.js";
 import { config } from "../config.js";
 import type { SearchQuery, Vacancy } from "../types.js";
 
 export { suggestArea } from "./hh.js";
 
-/** Подключённые источники. Новый источник — просто добавить сюда. */
+/** Базовые источники. Плюс динамические TG-каналы из настроек (store). */
 export const SOURCES: JobSource[] = [hhSource, trudvsemSource];
+
+/** Полный список источников: базовые + TG-каналы, добавленные в настройках. */
+function allSources(): JobSource[] {
+  return [...SOURCES, ...store.channels().map(tgChannelSource)];
+}
 
 /** Опрашивает все источники параллельно, объединяет и дедуплицирует результат. */
 export async function searchAll(q: SearchQuery, opts: SearchOpts): Promise<Vacancy[]> {
-  const settled = await Promise.allSettled(SOURCES.map((s) => s.search(q, opts)));
+  const sources = allSources();
+  const settled = await Promise.allSettled(sources.map((s) => s.search(q, opts)));
   const seen = new Set<string>();
   const merged: Vacancy[] = [];
 
@@ -24,7 +32,7 @@ export async function searchAll(q: SearchQuery, opts: SearchOpts): Promise<Vacan
         }
       }
     } else {
-      console.warn(`[sources] ${SOURCES[i].id} failed: ${r.reason?.message ?? r.reason}`);
+      console.warn(`[sources] ${sources[i].id} failed: ${r.reason?.message ?? r.reason}`);
     }
   });
 

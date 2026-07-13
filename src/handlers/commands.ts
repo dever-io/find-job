@@ -106,6 +106,7 @@ export function registerCommands(bot: Bot<Ctx>): void {
       { command: "start", description: "Начать / прислать резюме" },
       { command: "run", description: "Искать вакансии сейчас" },
       { command: "status", description: "Статус и воронка" },
+      { command: "settings", description: "Треки и источники" },
       { command: "digest", description: "Собрать аналитику за неделю" },
       { command: "help", description: "Как это работает" },
     ])

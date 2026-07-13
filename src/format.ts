@@ -34,6 +34,7 @@ export function scoreEmoji(score: number): string {
 const SRC_LABEL: Record<string, string> = {
   hh: "hh.ru",
   trudvsem: "Работа России",
+  tg: "Telegram-канал",
 };
 
 const STATUS_LABEL: Record<string, string> = {
