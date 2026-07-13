@@ -184,7 +184,7 @@ async function hhApiSearch(q: SearchQuery, { limit, periodDays }: SearchOpts): P
   p.set("area", q.areaId || "113");
   p.set("per_page", String(Math.min(limit, 100)));
   p.set("page", "0");
-  p.set("order_by", "publication_time");
+  p.set("order_by", "relevance"); // релевантность > свежести: качество матчей
   p.set("period", String(periodDays ?? 7));
   if (q.salaryFrom) p.set("salary", String(q.salaryFrom));
   if (q.experience) p.set("experience", q.experience);
@@ -290,7 +290,7 @@ async function hhWebSearch(q: SearchQuery, { limit, periodDays }: SearchOpts): P
   p.set("text", toHhText(q.keywords));
   p.set("area", q.areaId || "113");
   p.set("page", "0");
-  p.set("order_by", "publication_time");
+  p.set("order_by", "relevance"); // релевантность > свежести: качество матчей
   p.set("search_period", String(periodDays ?? 7)); // на сайте период называется search_period (дни)
   if (q.salaryFrom) p.set("salary", String(q.salaryFrom));
   if (q.experience) p.set("experience", q.experience);
