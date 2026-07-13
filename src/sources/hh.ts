@@ -1,3 +1,4 @@
+import https from "node:https";
 import { fetchJson, type JobSource, type SearchOpts } from "./base.js";
 import { config } from "../config.js";
 import type { SearchQuery, Vacancy } from "../types.js";
@@ -21,12 +22,53 @@ const hhCookies = new Map<string, string>();
 function cookieHeader(): string {
   return [...hhCookies].map(([k, v]) => `${k}=${v}`).join("; ");
 }
-function storeSetCookies(res: Response): void {
-  const list: string[] = (res.headers as any).getSetCookie?.() ?? [];
+function storeSetCookies(list: string[]): void {
   for (const c of list) {
     const pair = c.split(";")[0];
     const eq = pair.indexOf("=");
     if (eq > 0) hhCookies.set(pair.slice(0, eq).trim(), pair.slice(eq + 1).trim());
+  }
+}
+
+interface HttpResult {
+  status: number;
+  body: string;
+  setCookies: string[];
+}
+
+/**
+ * GET с опциональным SOCKS-прокси ТОЛЬКО для hh.ru (config.hhScrapeProxy). Без прокси —
+ * обычный fetch. С прокси — node:https + socks-proxy-agent (нативный fetch Node не
+ * принимает SOCKS-диспетчер без конфликта версий undici).
+ */
+async function httpGet(url: string, headers: Record<string, string>): Promise<HttpResult> {
+  if (config.hhScrapeProxy) {
+    const { SocksProxyAgent } = await import("socks-proxy-agent");
+    const agent = new SocksProxyAgent(config.hhScrapeProxy);
+    return new Promise<HttpResult>((resolve, reject) => {
+      const req = https.get(url, { headers, agent }, (res) => {
+        let d = "";
+        res.on("data", (c) => (d += c));
+        res.on("end", () =>
+          resolve({
+            status: res.statusCode ?? 0,
+            body: d,
+            setCookies: (res.headers["set-cookie"] as string[] | undefined) ?? [],
+          }),
+        );
+      });
+      req.setTimeout(20000, () => req.destroy(new Error(`таймаут ${url}`)));
+      req.on("error", reject);
+    });
+  }
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 20000);
+  try {
+    const res = await fetch(url, { headers, signal: ctrl.signal, redirect: "follow" });
+    const body = await res.text();
+    return { status: res.status, body, setCookies: (res.headers as any).getSetCookie?.() ?? [] };
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -59,8 +101,8 @@ async function warmup(): Promise<void> {
   if (hhWarmed) return;
   hhWarmed = true;
   try {
-    const res = await fetch(`${config.hhWebBase}/`, { headers: browserHeaders() });
-    storeSetCookies(res);
+    const res = await httpGet(`${config.hhWebBase}/`, browserHeaders());
+    storeSetCookies(res.setCookies);
   } catch {
     hhWarmed = false; // не вышло — попробуем в следующий раз
   }
@@ -72,23 +114,19 @@ async function scrapeHtml(url: string): Promise<string> {
   return paced(async () => {
     let lastErr: unknown;
     for (let attempt = 0; attempt < 4; attempt++) {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 20000);
       try {
-        const res = await fetch(url, { headers: browserHeaders(), signal: ctrl.signal, redirect: "follow" });
-        storeSetCookies(res); // куки берём даже с 403 — они помогают пройти ретрай
+        const res = await httpGet(url, browserHeaders());
+        storeSetCookies(res.setCookies); // куки берём даже с 403 — помогают пройти ретрай
         if (res.status === 403 || res.status === 429) {
           lastErr = new Error(`HTTP ${res.status} ${url}`);
           await sleep(700 * (attempt + 1) + Math.floor(Math.random() * 500));
           continue;
         }
-        if (!res.ok) throw new Error(`HTTP ${res.status} ${url}`);
-        return await res.text();
+        if (res.status < 200 || res.status >= 300) throw new Error(`HTTP ${res.status} ${url}`);
+        return res.body;
       } catch (e) {
         lastErr = e;
         await sleep(500 * (attempt + 1));
-      } finally {
-        clearTimeout(timer);
       }
     }
     throw lastErr ?? new Error(`scrapeHtml: не удалось получить ${url}`);

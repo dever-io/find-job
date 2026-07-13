@@ -59,6 +59,10 @@ export const config = {
   // Минимальный интервал между запросами к hh.ru при скрапинге (мс) — чтобы не
   // ловить наплывы 403 от DDoS-Guard. Запросы сериализуются с этой паузой.
   hhScrapeGapMs: num(env.HH_SCRAPE_GAP_MS, 500),
+  // SOCKS-прокси ТОЛЬКО для запросов к hh.ru (обход блока дата-центровых IP через
+  // RU-выход). Напр. socks5h://127.0.0.1:10800 (SSH -D туннель на RU-сервер).
+  // Пусто → ходим напрямую. Telegram/OpenRouter этим прокси НЕ затрагиваются.
+  hhScrapeProxy: env.HH_SCRAPE_PROXY ?? "",
 
   cronExpr: env.CRON_EXPR ?? "0 9 * * *",
   cronTz: env.CRON_TZ ?? "Europe/Moscow",
