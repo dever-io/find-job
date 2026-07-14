@@ -52,6 +52,19 @@ function looksLikeVacancy(text: string): boolean {
   return VAC_MARKERS.test(text);
 }
 
+/** Грубо определяет формат работы по тексту поста (у TG нет структурного поля). */
+function detectFormat(text: string): string | undefined {
+  const t = text.toLowerCase();
+  const remote = /\b(remote|удал[её]нк|удал[её]нн|из дома|out of office|релокац)/.test(t);
+  const hybrid = /\b(гибрид|hybrid|частично удал)/.test(t);
+  const office = /\b(офис|office|на месте|on-?site|в офисе)/.test(t);
+  if (hybrid) return "Гибрид";
+  if (remote && !office) return "Удалённо";
+  if (remote && office) return "Гибрид/офис";
+  if (office) return "В офисе";
+  return undefined;
+}
+
 function firstLine(text: string): string {
   const line = text.split("\n").map((s) => s.trim()).find((s) => s.length > 3) ?? text;
   return line.replace(/^[#*•\-–—>\s]+/, "").slice(0, 120) || "Вакансия из Telegram";
@@ -93,6 +106,7 @@ export function tgChannelSource(channel: string): JobSource {
         url: p.url,
         publishedAt: p.date,
         description: p.text,
+        workFormat: detectFormat(p.text),
       }));
     },
   };

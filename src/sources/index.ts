@@ -59,6 +59,7 @@ export async function enrichDetails(vacancies: Vacancy[]): Promise<void> {
         if (d.description) v.description = d.description;
         if (d.keySkills?.length) v.keySkills = d.keySkills;
         if (d.experienceName) v.experienceName = d.experienceName;
+        if (d.workFormat && !v.workFormat) v.workFormat = d.workFormat;
       } catch (e: any) {
         console.warn(`[enrich] ${v.id}: ${e?.message ?? e}`);
       }

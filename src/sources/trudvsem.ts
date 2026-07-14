@@ -41,6 +41,7 @@ export const trudvsemSource: JobSource = {
           currency: v.currency ?? "RUR",
           url: v.vac_url,
           publishedAt: v.creation_date,
+          workFormat: typeof v.schedule === "string" && v.schedule.trim() ? v.schedule.trim() : undefined,
           snippet: String(v.duty ?? "")
             .replace(/<[^>]+>/g, " ")
             .slice(0, 400),

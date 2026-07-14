@@ -57,6 +57,7 @@ export interface Vacancy {
   description?: string; // полное описание (добор через detail-endpoint)
   keySkills?: string[]; // ключевые навыки из карточки вакансии (hh key_skills)
   experienceName?: string; // требуемый опыт словами (напр. «3–6 лет»)
+  workFormat?: string; // график/формат работы словами («Удалённо», «Гибрид», «На месте · 5/2»)
 }
 
 /** Вердикт ИИ (или эвристики) о соответствии вакансии треку. */

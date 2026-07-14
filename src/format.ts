@@ -80,6 +80,7 @@ export function vacancyCard(v: Vacancy, verdict?: VerifyResult, opts: CardOpts =
   if (v.area) meta.push("📍 " + escapeHtml(v.area));
   if (meta.length) lines.push(meta.join("  ·  "));
   lines.push("💰 " + escapeHtml(fmtMoney(v.salaryFrom, v.salaryTo, v.currency)));
+  if (v.workFormat) lines.push("🗓 График: " + escapeHtml(v.workFormat));
   if (v.experienceName) lines.push("🧭 Опыт: " + escapeHtml(v.experienceName));
   if (verdict) {
     lines.push(`${scoreEmoji(verdict.score)} Совпадение: <b>${verdict.score}%</b>`);

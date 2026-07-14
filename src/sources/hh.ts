@@ -147,6 +147,42 @@ function stripHl(s: string): string {
   return s.replace(/<\/?highlighttext>/g, "");
 }
 
+/** Старый enum графика hh (schedule.id) → русская метка (fallback для work_format). */
+const SCHEDULE_LABELS: Record<string, string> = {
+  fullDay: "Полный день",
+  shift: "Сменный график",
+  flexible: "Гибкий график",
+  remote: "Удалённо",
+  flyInFlyOut: "Вахтовый метод",
+};
+
+/** Достаёт .name из массива объектов/строк ([{id,name}] | ["5/2"]). */
+function pickNames(arr: unknown): string[] {
+  if (!Array.isArray(arr)) return [];
+  return arr.map((x) => (typeof x === "string" ? x : (x as any)?.name)).filter((s): s is string => Boolean(s));
+}
+
+/**
+ * Человекочитаемый график работы: формат (На месте / Удалённо / Гибрид / Разъездной)
+ * из нового work_format, плюс дни (5/2, 2/2) из work_schedule_by_days. Если нового
+ * поля нет — падаем на старый schedule («Полный день» и т.п.).
+ */
+function workFormatLabel(src: { workFormat?: unknown; schedule?: unknown; byDays?: unknown }): string | undefined {
+  const parts: string[] = [];
+  const fmt = pickNames(src.workFormat);
+  if (fmt.length) {
+    parts.push(fmt.join(", "));
+  } else if (src.schedule) {
+    const s = src.schedule as any;
+    const name = typeof s === "string" ? SCHEDULE_LABELS[s] ?? s : s?.name;
+    if (name) parts.push(name);
+  }
+  const days = pickNames(src.byDays);
+  if (days.length) parts.push(days.join(", "));
+  const label = parts.filter(Boolean).join(" · ");
+  return label || undefined;
+}
+
 /**
  * Ключевые слова → HH-синтаксис поиска. LLM отдаёт список через запятую, но HH
  * трактует запятые как AND (нужны ВСЕ слова) → 0 результатов. Превращаем в OR,
@@ -207,13 +243,14 @@ async function hhApiSearch(q: SearchQuery, { limit, periodDays }: SearchOpts): P
     url: it.alternate_url,
     publishedAt: it.published_at,
     snippet: stripHl([it.snippet?.responsibility, it.snippet?.requirement].filter(Boolean).join(" ")),
+    workFormat: workFormatLabel({ workFormat: it.work_format, schedule: it.schedule, byDays: it.work_schedule_by_days }),
   }));
 }
 
 /** Добор деталей через api.hh.ru/vacancies/{id}. */
 async function hhApiDetail(
   nativeId: string,
-): Promise<{ description?: string; keySkills?: string[]; experienceName?: string }> {
+): Promise<{ description?: string; keySkills?: string[]; experienceName?: string; workFormat?: string }> {
   const data = await fetchJson(`${config.hhApiBase}/vacancies/${nativeId}`, { headers: HH_HEADERS });
   return {
     description: typeof data?.description === "string" ? htmlToText(data.description) : undefined,
@@ -221,6 +258,7 @@ async function hhApiDetail(
       ? data.key_skills.map((k: any) => k?.name).filter((s: any): s is string => Boolean(s))
       : undefined,
     experienceName: data?.experience?.name ?? undefined,
+    workFormat: workFormatLabel({ workFormat: data?.work_format, schedule: data?.schedule, byDays: data?.work_schedule_by_days }),
   };
 }
 
@@ -283,6 +321,11 @@ function mapWebVacancy(v: any): Vacancy {
     url: v.links?.desktop ?? `${config.hhWebBase}/vacancy/${vacancyId}`,
     publishedAt,
     experienceName: expLabel(v.workExperience),
+    workFormat: workFormatLabel({
+      workFormat: v.workFormat,
+      schedule: v.workSchedule ?? v.schedule,
+      byDays: v.workScheduleByDays,
+    }),
   };
 }
 
@@ -310,7 +353,7 @@ async function hhWebSearch(q: SearchQuery, { limit, periodDays }: SearchOpts): P
 /** Добор деталей через скрапинг страницы hh.ru/vacancy/{id}. */
 async function hhWebDetail(
   nativeId: string,
-): Promise<{ description?: string; keySkills?: string[]; experienceName?: string }> {
+): Promise<{ description?: string; keySkills?: string[]; experienceName?: string; workFormat?: string }> {
   const html = await scrapeHtml(`${config.hhWebBase}/vacancy/${nativeId}`);
   const st = extractInitialState(html);
   const vv = st?.vacancyView ?? {};
@@ -322,6 +365,11 @@ async function hhWebDetail(
     description: typeof vv.description === "string" ? htmlToText(vv.description) : undefined,
     keySkills: keySkills && keySkills.length ? keySkills : undefined,
     experienceName: expLabel(vv.workExperience ?? vv.experience),
+    workFormat: workFormatLabel({
+      workFormat: vv.workFormat,
+      schedule: vv.workSchedule ?? vv.schedule,
+      byDays: vv.workScheduleByDays,
+    }),
   };
 }
 
@@ -333,7 +381,7 @@ async function hhWebDetail(
  */
 export async function hhDetail(
   nativeId: string,
-): Promise<{ description?: string; keySkills?: string[]; experienceName?: string }> {
+): Promise<{ description?: string; keySkills?: string[]; experienceName?: string; workFormat?: string }> {
   return useScrape() ? hhWebDetail(nativeId) : hhApiDetail(nativeId);
 }
 
