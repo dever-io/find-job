@@ -147,8 +147,34 @@ function stripHl(s: string): string {
   return s.replace(/<\/?highlighttext>/g, "");
 }
 
-/** Старый enum графика hh (schedule.id) → русская метка (fallback для work_format). */
-const SCHEDULE_LABELS: Record<string, string> = {
+// ── Метки графика работы ──
+// HH отдаёт формат работы разными полями и как raw-enum: новый work_format
+// (ON_SITE/REMOTE/HYBRID/FIELD_WORK), дни work_schedule_by_days (FIVE_ON_TWO_OFF…),
+// старый schedule (@workSchedule: fullDay/remote/flexible/shift/flyInFlyOut).
+// Локализуем токены; уже локализованные строки (из API — name) пропускаем как есть.
+
+/** Формат работы: место (офис/удалёнка/гибрид/разъезд). */
+const FORMAT_LABELS: Record<string, string> = {
+  ON_SITE: "На месте",
+  REMOTE: "Удалённо",
+  HYBRID: "Гибрид",
+  FIELD_WORK: "Разъездной",
+};
+/** График по дням. */
+const DAYS_LABELS: Record<string, string> = {
+  FIVE_ON_TWO_OFF: "5/2",
+  TWO_ON_TWO_OFF: "2/2",
+  SIX_ON_ONE_OFF: "6/1",
+  THREE_ON_THREE_OFF: "3/3",
+  FOUR_ON_FOUR_OFF: "4/4",
+  FOUR_ON_THREE_OFF: "4/3",
+  TWO_ON_ONE_OFF: "2/1",
+  ONE_ON_THREE_OFF: "1/3",
+  FLEXIBLE: "гибкий график",
+  OTHER: "",
+};
+/** Старый enum schedule. */
+const OLD_SCHEDULE_LABELS: Record<string, string> = {
   fullDay: "Полный день",
   shift: "Сменный график",
   flexible: "Гибкий график",
@@ -156,31 +182,63 @@ const SCHEDULE_LABELS: Record<string, string> = {
   flyInFlyOut: "Вахтовый метод",
 };
 
-/** Достаёт .name из массива объектов/строк ([{id,name}] | ["5/2"]). */
-function pickNames(arr: unknown): string[] {
-  if (!Array.isArray(arr)) return [];
-  return arr.map((x) => (typeof x === "string" ? x : (x as any)?.name)).filter((s): s is string => Boolean(s));
+const isEnumToken = (s: string): boolean => /^[A-Z][A-Z_]+$/.test(s);
+
+/** Собирает все строки-листья из вложенной структуры ([{el:["REMOTE"]}] → ["REMOTE"]). */
+function collectStrings(x: unknown, out: string[] = []): string[] {
+  if (x == null) return out;
+  if (typeof x === "string") out.push(x);
+  else if (Array.isArray(x)) for (const e of x) collectStrings(e, out);
+  else if (typeof x === "object") for (const v of Object.values(x as object)) collectStrings(v, out);
+  return out;
+}
+const uniq = (a: string[]): string[] => [...new Set(a)];
+
+/** Локализует токен по карте; неизвестный enum → пусто, готовую строку (name) → как есть. */
+function loc(map: Record<string, string>, tok: string): string {
+  if (map[tok] !== undefined) return map[tok];
+  return isEnumToken(tok) ? "" : tok;
+}
+
+/** Старый schedule (строка-enum «remote» или объект {name}/{@id}) → метка. */
+function oldScheduleLabel(x: unknown): string | undefined {
+  if (!x) return undefined;
+  if (typeof x === "object") {
+    const o = x as any;
+    if (typeof o.name === "string" && o.name) return o.name;
+    if (typeof o["@id"] === "string") return OLD_SCHEDULE_LABELS[o["@id"]] || undefined;
+    return undefined;
+  }
+  if (typeof x === "string") return OLD_SCHEDULE_LABELS[x] ?? (isEnumToken(x) ? undefined : x);
+  return undefined;
 }
 
 /**
- * Человекочитаемый график работы: формат (На месте / Удалённо / Гибрид / Разъездной)
- * из нового work_format, плюс дни (5/2, 2/2) из work_schedule_by_days. Если нового
- * поля нет — падаем на старый schedule («Полный день» и т.п.).
+ * Человекочитаемый график: место работы (Удалённо/Гибрид/На месте) + дни (5/2).
+ * Если нового work_format нет — падаем на старый schedule. Работает и со скрап-стейтом
+ * (вложенные raw-enum), и с API (объекты {id,name}).
  */
-function workFormatLabel(src: { workFormat?: unknown; schedule?: unknown; byDays?: unknown }): string | undefined {
+function workFormatLabel(src: { formats?: unknown; byDays?: unknown; schedule?: unknown }): string | undefined {
   const parts: string[] = [];
-  const fmt = pickNames(src.workFormat);
+  const fmt = uniq(collectStrings(src.formats).map((t) => loc(FORMAT_LABELS, t)).filter(Boolean));
   if (fmt.length) {
     parts.push(fmt.join(", "));
-  } else if (src.schedule) {
-    const s = src.schedule as any;
-    const name = typeof s === "string" ? SCHEDULE_LABELS[s] ?? s : s?.name;
-    if (name) parts.push(name);
+    // дни осмысленны вместе с местом работы («На месте · 5/2»)
+    const days = uniq(collectStrings(src.byDays).map((t) => loc(DAYS_LABELS, t)).filter(Boolean));
+    if (days.length) parts.push(days.join(", "));
+  } else {
+    const s = oldScheduleLabel(src.schedule);
+    if (s) parts.push(s);
   }
-  const days = pickNames(src.byDays);
-  if (days.length) parts.push(days.join(", "));
-  const label = parts.filter(Boolean).join(" · ");
-  return label || undefined;
+  // дедуп без учёта регистра (напр. «Гибкий график» vs «гибкий график»)
+  const seen = new Set<string>();
+  const out = parts.filter((p) => {
+    const k = p.toLowerCase();
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  return out.join(" · ") || undefined;
 }
 
 /**
@@ -243,7 +301,7 @@ async function hhApiSearch(q: SearchQuery, { limit, periodDays }: SearchOpts): P
     url: it.alternate_url,
     publishedAt: it.published_at,
     snippet: stripHl([it.snippet?.responsibility, it.snippet?.requirement].filter(Boolean).join(" ")),
-    workFormat: workFormatLabel({ workFormat: it.work_format, schedule: it.schedule, byDays: it.work_schedule_by_days }),
+    workFormat: workFormatLabel({ formats: it.work_format, byDays: it.work_schedule_by_days, schedule: it.schedule }),
   }));
 }
 
@@ -258,7 +316,7 @@ async function hhApiDetail(
       ? data.key_skills.map((k: any) => k?.name).filter((s: any): s is string => Boolean(s))
       : undefined,
     experienceName: data?.experience?.name ?? undefined,
-    workFormat: workFormatLabel({ workFormat: data?.work_format, schedule: data?.schedule, byDays: data?.work_schedule_by_days }),
+    workFormat: workFormatLabel({ formats: data?.work_format, byDays: data?.work_schedule_by_days, schedule: data?.schedule }),
   };
 }
 
@@ -322,9 +380,9 @@ function mapWebVacancy(v: any): Vacancy {
     publishedAt,
     experienceName: expLabel(v.workExperience),
     workFormat: workFormatLabel({
-      workFormat: v.workFormat,
-      schedule: v.workSchedule ?? v.schedule,
+      formats: v.workFormats,
       byDays: v.workScheduleByDays,
+      schedule: v["@workSchedule"] ?? v.workSchedule,
     }),
   };
 }
@@ -366,9 +424,9 @@ async function hhWebDetail(
     keySkills: keySkills && keySkills.length ? keySkills : undefined,
     experienceName: expLabel(vv.workExperience ?? vv.experience),
     workFormat: workFormatLabel({
-      workFormat: vv.workFormat,
-      schedule: vv.workSchedule ?? vv.schedule,
+      formats: vv.workFormats,
       byDays: vv.workScheduleByDays,
+      schedule: vv["@workSchedule"] ?? vv.workSchedule ?? vv.schedule,
     }),
   };
 }
