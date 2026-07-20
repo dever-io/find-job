@@ -5,6 +5,7 @@ import { store } from "../store.js";
 import { runAll, runTrack } from "../jobs/run.js";
 import { postDigest } from "../jobs/digest.js";
 import { statusLabel } from "../format.js";
+import { sourceHealth } from "../sources/index.js";
 
 type Ctx = BotContext<Session>;
 
@@ -35,6 +36,17 @@ function helpText(): string {
   ].join("\n");
 }
 
+/** Строка о сломанных источниках (пусто, если все живы). */
+function sourceWarning(): string {
+  const bad = sourceHealth().filter((s) => s.error);
+  if (!bad.length) return "";
+  return (
+    "\n\n⚠️ Источник недоступен: " +
+    bad.map((s) => `${s.label} (${s.error?.slice(0, 60)})`).join("; ") +
+    "\nВакансии оттуда сейчас не приходят."
+  );
+}
+
 export function registerCommands(bot: Bot<Ctx>): void {
   // /start живёт в онбординге (handlers/onboarding.ts).
   bot.command("help", async (ctx) => {
@@ -60,12 +72,14 @@ export function registerCommands(bot: Bot<Ctx>): void {
       }
       await ctx.reply(`🔎 Ищу по треку ${arg}…`);
       const n = await runTrack(ctx.api, id);
-      await ctx.reply(`Готово: трек ${arg} — ${n} нов.`);
+      await ctx.reply(`Готово: трек ${arg} — ${n} нов.` + sourceWarning());
       return;
     }
     await ctx.reply("🔎 Ищу по всем трекам…");
     const res = await runAll(ctx.api);
-    await ctx.reply("Готово: " + store.tracks().map((t) => `${t.hashtag}=${res[t.id] ?? 0}`).join(", "));
+    await ctx.reply(
+      "Готово: " + store.tracks().map((t) => `${t.hashtag}=${res[t.id] ?? 0}`).join(", ") + sourceWarning(),
+    );
   });
 
   // Ручной дайджест (#аналитика).
@@ -86,6 +100,16 @@ export function registerCommands(bot: Bot<Ctx>): void {
     const all = store.allVacancies();
     lines.push("");
     lines.push(`Вакансий в истории: <b>${all.length}</b>`);
+
+    // Здоровье источников по последнему поиску (если он уже был в этом запуске).
+    const health = sourceHealth();
+    if (health.length) {
+      lines.push("");
+      lines.push("<b>Источники (последний поиск):</b>");
+      for (const s of health) {
+        lines.push(s.error ? `❌ ${s.label} — ${s.error.slice(0, 70)}` : `✅ ${s.label} — ${s.count}`);
+      }
+    }
 
     const ORDER: Status[] = ["Viewed", "Saved", "Responded", "Interview", "Offer", "Rejected", "Ignored"];
     for (const track of store.tracks()) {

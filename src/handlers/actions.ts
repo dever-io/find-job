@@ -79,6 +79,11 @@ async function makeLetter(ctx: Ctx, id: string, opts: LetterOpts): Promise<void>
       parse_mode: "HTML",
       link_preview_options: { is_disabled: true },
       reply_markup: kb,
+      // письмо вешаем ответом на карточку вакансии — видно, к чему оно относится.
+      // allow_sending_without_reply: карточку могли удалить — письмо всё равно уйдёт.
+      ...(rec.cardMessageId !== undefined
+        ? { reply_parameters: { message_id: rec.cardMessageId, allow_sending_without_reply: true } }
+        : {}),
     })
     .catch((e) => {
       console.error("[letter] send failed:", e?.message ?? e);

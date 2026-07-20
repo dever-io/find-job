@@ -16,15 +16,33 @@ function allSources(): JobSource[] {
   return [...SOURCES, ...store.channels().map(tgChannelSource)];
 }
 
+/**
+ * Отчёт о последнем опросе источников: сколько дал каждый и кто упал.
+ * Нужен, чтобы молчаливое падение источника (упал тоннель → 0 вакансий с hh)
+ * было видно в /run и /status, а не выглядело как «просто ничего не нашлось».
+ */
+export interface SourceHealth {
+  id: string;
+  label: string;
+  count: number;
+  error?: string;
+}
+let lastHealth: SourceHealth[] = [];
+export function sourceHealth(): SourceHealth[] {
+  return lastHealth;
+}
+
 /** Опрашивает все источники параллельно, объединяет и дедуплицирует результат. */
 export async function searchAll(q: SearchQuery, opts: SearchOpts): Promise<Vacancy[]> {
   const sources = allSources();
   const settled = await Promise.allSettled(sources.map((s) => s.search(q, opts)));
   const seen = new Set<string>();
   const merged: Vacancy[] = [];
+  const health: SourceHealth[] = [];
 
   settled.forEach((r, i) => {
     if (r.status === "fulfilled") {
+      health.push({ id: sources[i].id, label: sources[i].label, count: r.value.length });
       for (const v of r.value) {
         if (v.url && !seen.has(v.id)) {
           seen.add(v.id);
@@ -32,9 +50,12 @@ export async function searchAll(q: SearchQuery, opts: SearchOpts): Promise<Vacan
         }
       }
     } else {
-      console.warn(`[sources] ${sources[i].id} failed: ${r.reason?.message ?? r.reason}`);
+      const msg = String(r.reason?.message ?? r.reason);
+      health.push({ id: sources[i].id, label: sources[i].label, count: 0, error: msg });
+      console.warn(`[sources] ${sources[i].id} failed: ${msg}`);
     }
   });
+  lastHealth = health;
 
   // свежее — выше
   merged.sort((a, b) => (Date.parse(b.publishedAt ?? "") || 0) - (Date.parse(a.publishedAt ?? "") || 0));

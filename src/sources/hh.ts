@@ -41,26 +41,29 @@ interface HttpResult {
  * обычный fetch. С прокси — node:https + socks-proxy-agent (нативный fetch Node не
  * принимает SOCKS-диспетчер без конфликта версий undici).
  */
-async function httpGet(url: string, headers: Record<string, string>): Promise<HttpResult> {
-  if (config.hhScrapeProxy) {
-    const { SocksProxyAgent } = await import("socks-proxy-agent");
-    const agent = new SocksProxyAgent(config.hhScrapeProxy);
-    return new Promise<HttpResult>((resolve, reject) => {
-      const req = https.get(url, { headers, agent }, (res) => {
-        let d = "";
-        res.on("data", (c) => (d += c));
-        res.on("end", () =>
-          resolve({
-            status: res.statusCode ?? 0,
-            body: d,
-            setCookies: (res.headers["set-cookie"] as string[] | undefined) ?? [],
-          }),
-        );
-      });
-      req.setTimeout(20000, () => req.destroy(new Error(`таймаут ${url}`)));
-      req.on("error", reject);
+/** GET через SOCKS-прокси (RU-экзит) — node:https + socks-proxy-agent. */
+async function getViaProxy(url: string, headers: Record<string, string>): Promise<HttpResult> {
+  const { SocksProxyAgent } = await import("socks-proxy-agent");
+  const agent = new SocksProxyAgent(config.hhScrapeProxy);
+  return new Promise<HttpResult>((resolve, reject) => {
+    const req = https.get(url, { headers, agent }, (res) => {
+      let d = "";
+      res.on("data", (c) => (d += c));
+      res.on("end", () =>
+        resolve({
+          status: res.statusCode ?? 0,
+          body: d,
+          setCookies: (res.headers["set-cookie"] as string[] | undefined) ?? [],
+        }),
+      );
     });
-  }
+    req.setTimeout(20000, () => req.destroy(new Error(`таймаут ${url}`)));
+    req.on("error", reject);
+  });
+}
+
+/** GET напрямую с этого хоста (без прокси). */
+async function getDirect(url: string, headers: Record<string, string>): Promise<HttpResult> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 20000);
   try {
@@ -70,6 +73,33 @@ async function httpGet(url: string, headers: Record<string, string>): Promise<Ht
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** До этого времени прокси считаем мёртвым и ходим напрямую (0 = прокси в строю). */
+let proxyDownUntil = 0;
+const PROXY_COOLDOWN_MS = 5 * 60_000;
+
+/**
+ * GET с деградацией: если задан SOCKS-прокси (config.hhScrapeProxy) — идём через него,
+ * а при сетевой ошибке (прокси лёг / RU-сервер недоступен) молча падаем на прямой
+ * запрос и на 5 минут помечаем прокси мёртвым, потом пробуем снова. Так поиск не
+ * встаёт целиком из-за упавшего тоннеля: hh часто отвечает и напрямую.
+ */
+async function httpGet(url: string, headers: Record<string, string>): Promise<HttpResult> {
+  if (config.hhScrapeProxy && Date.now() >= proxyDownUntil) {
+    try {
+      const res = await getViaProxy(url, headers);
+      if (proxyDownUntil) {
+        proxyDownUntil = 0;
+        console.log("[hh] SOCKS-прокси снова доступен");
+      }
+      return res;
+    } catch (e: any) {
+      proxyDownUntil = Date.now() + PROXY_COOLDOWN_MS;
+      console.warn(`[hh] SOCKS-прокси недоступен (${e?.message ?? e}) — 5 мин работаем напрямую`);
+    }
+  }
+  return getDirect(url, headers);
 }
 
 /** Браузерные заголовки + накопленные куки — чтобы выглядеть как реальный клиент. */
