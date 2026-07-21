@@ -108,7 +108,8 @@ export type Awaiting =
   | { kind: "onb_keywords_a" } // ждём ключевые слова для трека по резюме (фолбэк без ИИ)
   | { kind: "onb_track_b" } // ждём описание второго направления
   | { kind: "settings_track" } // /настройки → ждём описание нового трека (роль)
-  | { kind: "settings_channel" }; // /настройки → ждём @канал или ссылку t.me
+  | { kind: "settings_channel" } // /настройки → ждём @канал или ссылку t.me
+  | { kind: "admin_field"; key: string }; // /admin → ждём новое значение настройки
 
 /** Сессия grammY: держит состояние диалога (онбординг, правка письма). */
 export interface Session {

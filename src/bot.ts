@@ -6,6 +6,7 @@ import { registerCommands } from "./handlers/commands.js";
 import { registerOnboarding } from "./handlers/onboarding.js";
 import { registerActions } from "./handlers/actions.js";
 import { registerSettings } from "./handlers/settings.js";
+import { registerAdmin } from "./handlers/admin.js";
 
 export type Ctx = BotContext<Session>;
 
@@ -30,6 +31,7 @@ export function makeBot() {
   registerOnboarding(bot); // /start + диалоговый онбординг (до actions: ловит onb_* текст)
   registerActions(bot);
   registerSettings(bot); // /settings: добавление/удаление треков и TG-каналов
+  registerAdmin(bot); // /admin: ключи провайдеров и прочие настройки на лету
 
   return bot;
 }

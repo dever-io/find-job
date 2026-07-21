@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { config } from "./config.js";
+import { applyOverride } from "./settings.js";
 import { nowIso } from "./util.js";
 import type { Status, StoredVacancy, TrackConfig, TrackId } from "./types.js";
 
@@ -11,6 +12,8 @@ interface Meta {
   ownerId?: number;
   /** Доп. источники — публичные Telegram-каналы (юзернеймы без @). */
   tgChannels?: string[];
+  /** Переопределения настроек из /admin (ключ поля config → значение-строка). */
+  settings?: Record<string, string>;
 }
 
 interface DB {
@@ -53,6 +56,8 @@ class Store {
       if (e?.code !== "ENOENT") throw e;
       await this.flush();
     }
+    // Применяем сохранённые /admin-переопределения поверх config (ключи, модели…).
+    for (const [k, v] of Object.entries(this.db.meta.settings ?? {})) applyOverride(k, v);
     this.loaded = true;
   }
 
@@ -138,6 +143,17 @@ class Store {
   async removeChannel(name: string): Promise<void> {
     const n = name.trim().replace(/^@/, "").toLowerCase();
     this.db.meta.tgChannels = (this.db.meta.tgChannels ?? []).filter((c) => c !== n);
+    await this.flush();
+  }
+
+  // ---- Настройки /admin (переопределения config) ----
+
+  /** Сохранить переопределение и применить его к живому config. */
+  async setSetting(key: string, value: string): Promise<void> {
+    const map = this.db.meta.settings ?? {};
+    map[key] = value;
+    this.db.meta.settings = map;
+    applyOverride(key, value);
     await this.flush();
   }
 
