@@ -15,6 +15,9 @@ export interface ProviderDef {
 export const PROVIDERS: ProviderDef[] = [
   { id: "openrouter", label: "OpenRouter", base: "https://openrouter.ai/api/v1", keyHint: "sk-or-v1-…" },
   { id: "openai", label: "OpenAI", base: "https://api.openai.com/v1", keyHint: "sk-…" },
+  // Anthropic: нативный API НЕ OpenAI-совместим, но есть compat-эндпоинт на /v1
+  // (Bearer + заголовок anthropic-version, который добавляется в ai/openrouter.ts).
+  { id: "anthropic", label: "Anthropic (Claude)", base: "https://api.anthropic.com/v1", keyHint: "sk-ant-…" },
   { id: "deepseek", label: "DeepSeek", base: "https://api.deepseek.com", keyHint: "sk-…" },
   { id: "groq", label: "Groq", base: "https://api.groq.com/openai/v1", keyHint: "gsk_…" },
   { id: "mistral", label: "Mistral", base: "https://api.mistral.ai/v1", keyHint: "…" },

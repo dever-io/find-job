@@ -1,5 +1,5 @@
 import { config } from "../config.js";
-import { chatUrl, modelsUrl } from "../providers.js";
+import { chatUrl, modelsUrl, resolveBase } from "../providers.js";
 import https from "node:https";
 
 // Клиент любого OpenAI-совместимого провайдера (OpenRouter/OpenAI/DeepSeek/Groq/…).
@@ -20,13 +20,16 @@ export interface ChatOptions {
 type Headers = Record<string, string>;
 
 function authHeaders(): Headers {
-  return {
+  const h: Headers = {
     Authorization: `Bearer ${config.aiKey}`,
     "Content-Type": "application/json",
     // OpenRouter просит указывать источник трафика (прочие провайдеры игнорируют):
     "HTTP-Referer": config.appUrl,
     "X-Title": config.appTitle,
   };
+  // Anthropic compat-эндпоинт требует версию API (Bearer он принимает).
+  if (resolveBase().includes("api.anthropic.com")) h["anthropic-version"] = "2023-06-01";
+  return h;
 }
 
 // ── HTTP через SOCKS-прокси (config.aiProxy) или напрямую (глобальный fetch) ──
