@@ -13,14 +13,19 @@ export const config = {
   // Единственный пользователь-владелец: только он управляет ботом.
   ownerId: env.OWNER_ID ? Number(env.OWNER_ID) : undefined,
 
-  openRouterKey: env.OPENROUTER_API_KEY ?? "",
-  openRouterUrl: env.OPENROUTER_URL ?? "https://openrouter.ai/api/v1/chat/completions",
-  // OpenRouter гео-блокирует РФ-IP (403). Если бот работает с РФ-IP (дома), можно
-  // туннелировать ТОЛЬКО запросы к OpenRouter через не-РФ прокси (напр. SSH -D на
-  // свой сервер): OPENROUTER_PROXY=socks5h://127.0.0.1:1080. HH при этом идёт напрямую.
-  openRouterProxy: env.OPENROUTER_PROXY ?? "",
-  // Модели для скоринга вакансий: перебор с фолбэком. Дешёвые платные слаги —
-  // free-версии OpenRouter отключил (404/429), см. project-hh-access контекст.
+  // ── ИИ-провайдер (любой OpenAI-совместимый Chat Completions API) ──
+  // Провайдер выбирается из реестра (src/providers.ts): openrouter, openai,
+  // deepseek, groq, mistral, together или "custom" со своим aiBase.
+  aiProvider: env.AI_PROVIDER ?? "openrouter",
+  // База OpenAI-совместимого API (без /chat/completions). Пусто → берётся из
+  // реестра по aiProvider. Для custom-провайдера указывается явно.
+  aiBase: env.AI_BASE ?? "",
+  // Ключ провайдера. OPENROUTER_API_KEY — для обратной совместимости со старым .env.
+  aiKey: env.AI_KEY ?? env.OPENROUTER_API_KEY ?? "",
+  // SOCKS-прокси ТОЛЬКО для запросов к ИИ (обход гео-блокировки, напр. OpenRouter
+  // режет РФ-IP). Напр. socks5h://127.0.0.1:1080. Пусто → напрямую.
+  aiProxy: env.AI_PROXY ?? env.OPENROUTER_PROXY ?? "",
+  // Модели для скоринга вакансий: перебор с фолбэком.
   scoreModels: (
     env.OPENROUTER_SCORE_MODELS ??
     "deepseek/deepseek-chat-v3-0324,meta-llama/llama-3.3-70b-instruct"
@@ -28,7 +33,7 @@ export const config = {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean),
-  // Сильная модель для генерации сопроводительных писем (не free-tier).
+  // Модель для генерации сопроводительных писем.
   letterModel: env.LETTER_MODEL ?? "deepseek/deepseek-v4-pro",
 
   appUrl: env.APP_PUBLIC_URL ?? "https://t.me",

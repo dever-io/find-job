@@ -57,7 +57,7 @@ function buildPrompt(track: TrackConfig, v: Vacancy, opts: LetterOpts): string {
  * Бросает, если нет ключа OpenRouter — писем без ИИ не делаем.
  */
 export async function generateLetter(track: TrackConfig, v: Vacancy, opts: LetterOpts = {}): Promise<string> {
-  if (!config.openRouterKey) throw new Error("OPENROUTER_API_KEY не задан — генерация писем недоступна");
+  if (!config.aiKey) throw new Error("ключ ИИ не задан — генерация писем недоступна");
   const text = await chat(
     {
       model: config.letterModel,

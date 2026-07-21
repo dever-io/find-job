@@ -44,7 +44,7 @@ export interface ResumeTrack {
  * и требуемый опыт. Бросает, если нет ключа OpenRouter (тогда — ручной ввод).
  */
 export async function deriveResumeTrack(resume: string): Promise<ResumeTrack> {
-  if (!config.openRouterKey) throw new Error("OPENROUTER_API_KEY не задан");
+  if (!config.aiKey) throw new Error("ключ ИИ не задан");
   const system =
     "Ты помогаешь настроить поиск вакансий по резюме. Верни ТОЛЬКО JSON без пояснений.";
   const user =
@@ -79,7 +79,7 @@ export interface TargetTrack {
  * + карту переноса опыта из резюме на язык этой роли.
  */
 export async function deriveTargetTrack(resume: string, targetRole: string): Promise<TargetTrack> {
-  if (!config.openRouterKey) throw new Error("OPENROUTER_API_KEY не задан");
+  if (!config.aiKey) throw new Error("ключ ИИ не задан");
 
   const meta = await askJson(
     "Ты помогаешь настроить поиск вакансий. Верни ТОЛЬКО JSON без пояснений.",

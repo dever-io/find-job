@@ -52,7 +52,7 @@ async function handleResume(ctx: Ctx, resume: string): Promise<void> {
     // сообщение вводит в заблуждение. Реальную причину пишем в лог.
     console.warn("[onboarding] deriveResumeTrack failed:", e?.message ?? e);
     ctx.session.awaiting = { kind: "onb_keywords_a" };
-    const why = config.openRouterKey ? "ИИ-подбор временно недоступен" : "нужен OPENROUTER_API_KEY";
+    const why = config.aiKey ? "ИИ-подбор временно недоступен" : "нужен OPENROUTER_API_KEY";
     await ctx.reply(
       `Не смог определить автоматически (${why}). Напиши поисковый запрос под своё резюме — роль/специализацию, напр. «руководитель проектов продакшн».`,
     );

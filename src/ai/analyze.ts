@@ -157,7 +157,7 @@ function summarize(a: Analysis, score: number): string {
 /** Анализ одной вакансии для трека: перебор моделей → взвешенный скор, затем эвристика. */
 export async function analyzeOne(track: TrackConfig, v: Vacancy): Promise<VerifyResult> {
   const models = config.scoreModels;
-  if (config.openRouterKey && models.length) {
+  if (config.aiKey && models.length) {
     for (const model of models) {
       try {
         const text = await chat({

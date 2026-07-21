@@ -1,5 +1,6 @@
 import cron from "node-cron";
 import { config } from "./config.js";
+import { providerLabel } from "./providers.js";
 import { store } from "./store.js";
 import { makeBot } from "./bot.js";
 import { runAll, runHotAll } from "./jobs/run.js";
@@ -54,7 +55,7 @@ async function main(): Promise<void> {
 
   console.log(
     `CareerAgent · дневной крон "${config.cronExpr}", горячий "${config.hotCronExpr}" (${config.cronTz}) · ` +
-      `ИИ: ${config.openRouterKey ? `OpenRouter (score=[${config.scoreModels.join(", ")}], letter=${config.letterModel})` : "выключен → эвристика"}`,
+      `ИИ: ${config.aiKey ? `${providerLabel()} (score=[${config.scoreModels.join(", ")}], letter=${config.letterModel})` : "выключен → эвристика"}`,
   );
 
   await bot.start({
