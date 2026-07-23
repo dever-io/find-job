@@ -126,7 +126,10 @@ function renderModels(role: "letter" | "score", page: number): { text: string; k
   for (const [t, d] of nav) kb.text(t, d);
   if (nav.length) kb.row();
   kb.text("🔍 Фильтр", `adm:${pfx}:find`);
-  if (role === "score") kb.text(`💾 Сохранить (${scoreDraft.size})`, "adm:sm:save");
+  if (role === "score") {
+    kb.text("🧹 Очистить", `adm:sm:clear:${p}`);
+    kb.text(`💾 Сохранить (${scoreDraft.size})`, "adm:sm:save");
+  }
   kb.row().text("⬅️ Назад", `adm:task:${role}`);
   const head = role === "letter" ? "Выбери <b>модель для писем</b>" : "Отметь <b>модели скоринга</b>, затем «Сохранить»";
   const prov = providerLabelOf(endpointFor(role).providerId);
@@ -149,7 +152,9 @@ async function openModelPicker(ctx: Ctx, role: "letter" | "score"): Promise<void
     return;
   }
   view = modelCache;
-  if (role === "score") scoreDraft = new Set(config.scoreModels);
+  // В черновик берём только модели, доступные у ТЕКУЩЕГО провайдера — чтобы после
+  // смены провайдера в выборе не висели чужие слаги (deepseek у Anthropic и т.п.).
+  if (role === "score") scoreDraft = new Set(config.scoreModels.filter((m) => modelCache.includes(m)));
   await show(ctx, renderModels(role, 0), true);
 }
 
@@ -277,6 +282,12 @@ export function registerAdmin(bot: Bot<Ctx>): void {
     if (model) scoreDraft.has(model) ? scoreDraft.delete(model) : scoreDraft.add(model);
     await ctx.answerCallbackQuery();
     await show(ctx, renderModels("score", Number(mm[2])), true);
+  });
+  bot.callbackQuery(/^adm:sm:clear:(\d+)$/, async (ctx) => {
+    if (await denyIfNotOwner(ctx)) return;
+    scoreDraft.clear();
+    await ctx.answerCallbackQuery({ text: "Выбор очищен" });
+    await show(ctx, renderModels("score", Number((ctx.match as RegExpMatchArray)[1])), true);
   });
   bot.callbackQuery("adm:sm:save", async (ctx) => {
     if (await denyIfNotOwner(ctx)) return;
