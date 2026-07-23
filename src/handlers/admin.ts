@@ -5,7 +5,7 @@ import { store } from "../store.js";
 import { config } from "../config.js";
 import { escapeHtml } from "../format.js";
 import { TEXT_FIELDS, isSecret, displayValue } from "../settings.js";
-import { PROVIDERS, providerDef, providerLabel } from "../providers.js";
+import { PROVIDERS, providerDef, providerLabel, chatUrl } from "../providers.js";
 import { chat, listModels } from "../ai/openrouter.js";
 
 type Ctx = BotContext<Session>;
@@ -302,6 +302,18 @@ export function registerAdmin(bot: Bot<Ctx>): void {
     const value = ctx.message.text.trim();
     await store.setSetting(key, value);
     if (isSecret(key)) await ctx.deleteMessage().catch(() => {});
+
+    // Свой base URL — показываем итоговый эндпоинт и предупреждаем о явно неверном хосте.
+    if (key === "aiBase") {
+      const warn = /console\.|dashboard|\/keys|\/settings/i.test(value)
+        ? "\n⚠️ Похоже на адрес личного кабинета, а не API. Обычно нужен хост вида <code>api.…</code>."
+        : "";
+      await ctx.reply(
+        `✅ Свой base URL сохранён.\nЗапросы пойдут на: <code>${escapeHtml(chatUrl())}</code>${warn}\nПроверь кнопкой «🔌 Проверить ИИ».`,
+        { parse_mode: "HTML" },
+      );
+      return;
+    }
     const label = TEXT_FIELDS.find((f) => f.key === key)?.label ?? key;
     await ctx.reply(
       `✅ «${escapeHtml(label)}» обновлено: <code>${escapeHtml(displayValue(key))}</code>\nПрименено сразу.`,

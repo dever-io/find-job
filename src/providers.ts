@@ -35,7 +35,9 @@ export function providerLabel(): string {
 
 /** База OpenAI-совместимого API: явный aiBase → иначе из реестра по aiProvider. */
 export function resolveBase(): string {
-  const b = config.aiBase || providerDef(config.aiProvider)?.base || "";
+  let b = config.aiBase || providerDef(config.aiProvider)?.base || "";
+  b = b.trim();
+  if (b && !/^https?:\/\//i.test(b)) b = "https://" + b; // без схемы fetch не парсит URL
   return b.replace(/\/+$/, "");
 }
 
