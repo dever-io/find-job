@@ -106,10 +106,17 @@ function request(
     : reqDirect(method, url, headers, body, timeoutMs);
 }
 
-/** Один запрос к Chat Completions провайдера роли. Бросает при ошибке/пустом ответе. */
+/**
+ * Один запрос к Chat Completions провайдера роли. Бросает при ошибке/пустом ответе.
+ *
+ * Разные провайдеры/модели не принимают часть параметров (новые Claude: 400
+ * «temperature is deprecated»; o-серия OpenAI: max_tokens → max_completion_tokens;
+ * не-OpenRouter не знают reasoning). Поэтому при 400 про конкретный параметр
+ * адаптируем payload и повторяем — до 3 попыток.
+ */
 export async function chat(opts: ChatOptions, timeoutMs = 30000): Promise<string> {
   if (!endpointFor(opts.role).key) throw new Error("ключ ИИ не задан");
-  const body = JSON.stringify({
+  const payload: Record<string, unknown> = {
     model: opts.model,
     temperature: opts.temperature ?? 0.2,
     max_tokens: opts.maxTokens ?? 400,
@@ -118,11 +125,39 @@ export async function chat(opts: ChatOptions, timeoutMs = 30000): Promise<string
       ...(opts.system ? [{ role: "system", content: opts.system }] : []),
       { role: "user", content: opts.user },
     ],
-  });
-  const data = await request("POST", chatUrlFor(opts.role), authHeaders(opts.role), body, timeoutMs);
-  const content = data?.choices?.[0]?.message?.content;
-  if (typeof content !== "string" || !content.trim()) throw new Error("ИИ: пустой ответ");
-  return content;
+  };
+
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const data = await request("POST", chatUrlFor(opts.role), authHeaders(opts.role), JSON.stringify(payload), timeoutMs);
+      const content = data?.choices?.[0]?.message?.content;
+      if (typeof content !== "string" || !content.trim()) throw new Error("ИИ: пустой ответ");
+      return content;
+    } catch (e: any) {
+      const msg = String(e?.message ?? e);
+      if (attempt >= 3 || !/ИИ 4\d\d/.test(msg)) throw e;
+      // Модель не принимает параметр → убираем/заменяем его и повторяем.
+      if (/temperature/i.test(msg) && "temperature" in payload) {
+        delete payload.temperature;
+        continue;
+      }
+      if (/max_completion_tokens/i.test(msg) && "max_tokens" in payload) {
+        payload.max_completion_tokens = payload.max_tokens;
+        delete payload.max_tokens;
+        continue;
+      }
+      if (/reasoning/i.test(msg) && "reasoning" in payload) {
+        delete payload.reasoning;
+        continue;
+      }
+      if (/max_tokens/i.test(msg) && "max_tokens" in payload) {
+        payload.max_completion_tokens = payload.max_tokens;
+        delete payload.max_tokens;
+        continue;
+      }
+      throw e;
+    }
+  }
 }
 
 /**

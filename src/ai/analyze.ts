@@ -166,9 +166,12 @@ export async function analyzeOne(track: TrackConfig, v: Vacancy): Promise<Verify
           role: "score",
           system: SYSTEM,
           user: buildPrompt(track, v),
-          maxTokens: 800,
+          // 800 не хватало: подробные модели (sonnet) на длинных вакансиях обрезали
+          // JSON по лимиту → парс-фейл → молчаливый фолбэк на следующую модель.
+          maxTokens: 1600,
         });
         const a = parse(text);
+        if (!a) console.warn(`[analyze] ${model}: ответ не распарсился (len=${text.length})`);
         if (a) {
           const score = weightedScore(a.factors, track.weights);
           return {
