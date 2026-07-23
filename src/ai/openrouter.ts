@@ -30,8 +30,13 @@ function authHeaders(role?: Role): Headers {
     "HTTP-Referer": config.appUrl,
     "X-Title": config.appTitle,
   };
-  // Anthropic compat-эндпоинт требует версию API (Bearer он принимает).
-  if (ep.base.includes("api.anthropic.com")) h["anthropic-version"] = "2023-06-01";
+  // Anthropic: у него РАЗНАЯ авторизация на эндпоинтах. /v1/chat/completions
+  // (OpenAI-compat) принимает Bearer, а нативный /v1/models ждёт x-api-key. Шлём
+  // оба заголовка + версию API — тогда работают и генерация, и список моделей.
+  if (ep.base.includes("api.anthropic.com")) {
+    h["anthropic-version"] = "2023-06-01";
+    h["x-api-key"] = ep.key;
+  }
   return h;
 }
 
