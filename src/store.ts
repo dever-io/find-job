@@ -14,6 +14,8 @@ interface Meta {
   tgChannels?: string[];
   /** Переопределения настроек из /admin (ключ поля config → значение-строка). */
   settings?: Record<string, string>;
+  /** Накопленная статистика токенов по задачам (score/letter) — для оценки цены в /admin. */
+  aiUsage?: Partial<Record<string, { promptSum: number; completionSum: number; n: number }>>;
 }
 
 interface DB {
@@ -155,6 +157,38 @@ class Store {
     this.db.meta.settings = map;
     applyOverride(key, value);
     await this.flush();
+  }
+
+  // ---- Статистика токенов по задачам (для оценки цены модели в /admin) ----
+
+  /** Записывает фактические токены одного вызова (из usage ответа API). Копится
+   *  скользящей суммой — не блокирует flush остальных операций. */
+  recordAiUsage(role: string, promptTokens: number, completionTokens: number): void {
+    if (!(promptTokens > 0 || completionTokens > 0)) return;
+    const map = this.db.meta.aiUsage ?? {};
+    const cur = map[role] ?? { promptSum: 0, completionSum: 0, n: 0 };
+    // Скользящее окно (последние ~200 вызовов) — не даём сумме расти бесконечно
+    // и не даём старым (иной модели/провайдера) данным доминировать вечно.
+    const CAP = 200;
+    if (cur.n >= CAP) {
+      const scale = (CAP - 1) / CAP;
+      cur.promptSum *= scale;
+      cur.completionSum *= scale;
+      cur.n = CAP - 1;
+    }
+    cur.promptSum += promptTokens;
+    cur.completionSum += completionTokens;
+    cur.n += 1;
+    map[role] = cur;
+    this.db.meta.aiUsage = map;
+    void this.flush();
+  }
+
+  /** Средние токены на вызов задачи (score/letter) по накопленной статистике. */
+  aiStat(role: string): { p: number; c: number; n: number } | undefined {
+    const cur = this.db.meta.aiUsage?.[role];
+    if (!cur || cur.n <= 0) return undefined;
+    return { p: Math.round(cur.promptSum / cur.n), c: Math.round(cur.completionSum / cur.n), n: cur.n };
   }
 
   // ---- Дедуп ----

@@ -1,5 +1,6 @@
 import { config } from "../config.js";
 import { chatUrlFor, modelsUrlFor, endpointFor, type Role } from "../providers.js";
+import { store } from "../store.js";
 import https from "node:https";
 
 // Клиент любого OpenAI-совместимого провайдера (OpenRouter/OpenAI/DeepSeek/Groq/…).
@@ -132,6 +133,9 @@ export async function chat(opts: ChatOptions, timeoutMs = 30000): Promise<string
       const data = await request("POST", chatUrlFor(opts.role), authHeaders(opts.role), JSON.stringify(payload), timeoutMs);
       const content = data?.choices?.[0]?.message?.content;
       if (typeof content !== "string" || !content.trim()) throw new Error("ИИ: пустой ответ");
+      // usage — формат OpenAI (prompt_tokens/completion_tokens); Anthropic-compat отдаёт то же.
+      const u = data?.usage;
+      if (opts.role && u) store.recordAiUsage(opts.role, Number(u.prompt_tokens) || 0, Number(u.completion_tokens) || 0);
       return content;
     } catch (e: any) {
       const msg = String(e?.message ?? e);
@@ -168,6 +172,14 @@ export async function listModels(role?: Role, timeoutMs = 20000): Promise<string
   if (!endpointFor(role).key) throw new Error("ключ ИИ не задан");
   const data = await request("GET", modelsUrlFor(role), authHeaders(role), undefined, timeoutMs);
   const items: any[] = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
+  // OpenRouter отдаёт тариф прямо в /models (pricing.prompt/completion, $/токен) —
+  // это точнее статичной таблицы в pricing.ts, кладём в её динамический кэш.
+  if (items.some((m) => m?.pricing)) {
+    const { setDynamicPrice } = await import("./pricing.js");
+    for (const m of items) {
+      if (m?.id && m?.pricing) setDynamicPrice(m.id, m.pricing.prompt, m.pricing.completion);
+    }
+  }
   const ids = items
     .map((m) => (typeof m === "string" ? m : m?.id))
     .filter((s): s is string => typeof s === "string" && Boolean(s));

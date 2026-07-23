@@ -7,6 +7,7 @@ import { escapeHtml } from "../format.js";
 import { TEXT_FIELDS, KEY_LABEL, isSecret, displayValue } from "../settings.js";
 import { PROVIDERS, providerDef, providerLabelOf, endpointFor, roleHasOwn, keyFor, chatUrlFor, type Role } from "../providers.js";
 import { chat, listModels } from "../ai/openrouter.js";
+import { estimateUsd, avgTokens, fmtUsd } from "../ai/pricing.js";
 
 type Ctx = BotContext<Session>;
 type Scope = "main" | "score" | "letter";
@@ -36,7 +37,16 @@ function taskLine(role: "score" | "letter"): string {
   const ep = endpointFor(role);
   const prov = roleHasOwn(role) ? providerLabelOf(ep.providerId) : `как общий (${providerLabelOf(ep.providerId)})`;
   const models = role === "score" ? displayValue("scoreModels") : displayValue("letterModel");
-  return `${TASK_TITLE[role]}\n   провайдер: ${escapeHtml(prov)}\n   ${role === "score" ? "модели" : "модель"}: <code>${escapeHtml(models)}</code>`;
+  return `${TASK_TITLE[role]}\n   провайдер: ${escapeHtml(prov)}\n   ${role === "score" ? "модели" : "модель"}: <code>${escapeHtml(models)}</code>\n   ${costLine(role)}`;
+}
+
+/** Ориентировочная цена задачи по первой модели (та, что реально используется). */
+function costLine(role: "score" | "letter"): string {
+  const model = role === "score" ? config.scoreModels[0] : config.letterModel;
+  if (!model) return "💰 модель не выбрана";
+  const usd = estimateUsd(role, model);
+  const per = role === "score" ? "вакансию" : "письмо";
+  return usd === null ? `💰 цена <code>${escapeHtml(model)}</code> неизвестна` : `💰 ≈${fmtUsd(usd)} за ${per}`;
 }
 
 function renderAdmin(): { text: string; keyboard: InlineKeyboard } {
@@ -74,6 +84,7 @@ function renderTask(role: "score" | "letter"): { text: string; keyboard: InlineK
     `<b>Провайдер:</b> ${escapeHtml(provLine)}`,
     `<b>Ключ:</b> <code>${escapeHtml(keyLine)}</code>`,
     `<b>${role === "score" ? "Модели" : "Модель"}:</b> <code>${escapeHtml(models)}</code>`,
+    costLine(role),
     own && config.aiProvider !== ep.providerId && providerDef(ep.providerId)?.id === "custom"
       ? `<b>base URL:</b> <code>${escapeHtml(displayValue(f.base))}</code>`
       : "",
@@ -106,7 +117,13 @@ async function loadModels(role: Role): Promise<string[]> {
   modelRole = role;
   return modelCache;
 }
-const shorten = (s: string): string => (s.length > 42 ? s.slice(0, 40) + "…" : s);
+const shorten = (s: string, n = 30): string => (s.length > n ? s.slice(0, n - 2) + "…" : s);
+
+/** Подпись цены для кнопки модели: «≈$0.02/шт» или «цена?» если тариф неизвестен. */
+function priceTag(role: "letter" | "score", model: string): string {
+  const usd = estimateUsd(role, model);
+  return usd === null ? "цена?" : `≈${fmtUsd(usd)}`;
+}
 
 function renderModels(role: "letter" | "score", page: number): { text: string; keyboard: InlineKeyboard } {
   const total = view.length;
@@ -117,8 +134,9 @@ function renderModels(role: "letter" | "score", page: number): { text: string; k
   const kb = new InlineKeyboard();
   slice.forEach((m, i) => {
     const idx = p * PAGE + i;
-    if (role === "score") kb.text(`${scoreDraft.has(m) ? "✅ " : "▫️ "}${shorten(m)}`, `adm:sm:tg:${idx}:${p}`).row();
-    else kb.text(shorten(m), `adm:lm:pk:${idx}`).row();
+    const label = `${shorten(m)} · ${priceTag(role, m)}`;
+    if (role === "score") kb.text(`${scoreDraft.has(m) ? "✅ " : "▫️ "}${label}`, `adm:sm:tg:${idx}:${p}`).row();
+    else kb.text(label, `adm:lm:pk:${idx}`).row();
   });
   const nav: [string, string][] = [];
   if (p > 0) nav.push(["◀️", `adm:${pfx}:pg:${p - 1}`]);
@@ -133,8 +151,14 @@ function renderModels(role: "letter" | "score", page: number): { text: string; k
   kb.row().text("⬅️ Назад", `adm:task:${role}`);
   const head = role === "letter" ? "Выбери <b>модель для писем</b>" : "Отметь <b>модели скоринга</b>, затем «Сохранить»";
   const prov = providerLabelOf(endpointFor(role).providerId);
+  const t = avgTokens(role);
+  const basis = t.measured
+    ? `по статистике реальных запросов (${store.aiStat(role)?.n ?? 0} шт., ≈${t.p}+${t.c} ток.)`
+    : `по умолчанию, статистики ещё нет (≈${t.p}+${t.c} ток. на запрос)`;
   return {
-    text: `${head}\nПровайдер: ${escapeHtml(prov)} · моделей: ${total} · стр. ${p + 1}/${pages}\n<i>🔍 Фильтр — часть названия.</i>`,
+    text:
+      `${head}\nПровайдер: ${escapeHtml(prov)} · моделей: ${total} · стр. ${p + 1}/${pages}\n` +
+      `<i>💰 Цена — за один вызов, ${basis}. 🔍 Фильтр — часть названия.</i>`,
     keyboard: kb,
   };
 }
