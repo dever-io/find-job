@@ -1,6 +1,7 @@
 import { config } from "../config.js";
 import type { TrackConfig, Vacancy } from "../types.js";
 import { chat } from "./openrouter.js";
+import { keyFor } from "../providers.js";
 
 const SYSTEM =
   "Ты помогаешь кандидату писать сопроводительные письма к вакансиям на русском языке. " +
@@ -57,10 +58,11 @@ function buildPrompt(track: TrackConfig, v: Vacancy, opts: LetterOpts): string {
  * Бросает, если нет ключа OpenRouter — писем без ИИ не делаем.
  */
 export async function generateLetter(track: TrackConfig, v: Vacancy, opts: LetterOpts = {}): Promise<string> {
-  if (!config.aiKey) throw new Error("ключ ИИ не задан — генерация писем недоступна");
+  if (!keyFor("letter")) throw new Error("ключ ИИ не задан — генерация писем недоступна");
   const text = await chat(
     {
       model: config.letterModel,
+      role: "letter",
       system: SYSTEM,
       user: buildPrompt(track, v, opts),
       temperature: 0.5,

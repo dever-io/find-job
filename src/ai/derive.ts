@@ -1,6 +1,7 @@
 import { config } from "../config.js";
 import type { Experience } from "../types.js";
 import { chat } from "./openrouter.js";
+import { keyFor } from "../providers.js";
 
 const EXPS: Experience[] = ["noExperience", "between1And3", "between3And6", "moreThan6"];
 
@@ -22,7 +23,7 @@ function parseJson(text: string): any | null {
 async function askJson(system: string, user: string): Promise<any | null> {
   for (const model of config.scoreModels) {
     try {
-      const text = await chat({ model, system, user, maxTokens: 500 });
+      const text = await chat({ model, role: "score", system, user, maxTokens: 500 });
       const o = parseJson(text);
       if (o) return o;
     } catch (e: any) {
@@ -44,7 +45,7 @@ export interface ResumeTrack {
  * и требуемый опыт. Бросает, если нет ключа OpenRouter (тогда — ручной ввод).
  */
 export async function deriveResumeTrack(resume: string): Promise<ResumeTrack> {
-  if (!config.aiKey) throw new Error("ключ ИИ не задан");
+  if (!keyFor("score")) throw new Error("ключ ИИ не задан");
   const system =
     "Ты помогаешь настроить поиск вакансий по резюме. Верни ТОЛЬКО JSON без пояснений.";
   const user =
@@ -79,7 +80,7 @@ export interface TargetTrack {
  * + карту переноса опыта из резюме на язык этой роли.
  */
 export async function deriveTargetTrack(resume: string, targetRole: string): Promise<TargetTrack> {
-  if (!config.aiKey) throw new Error("ключ ИИ не задан");
+  if (!keyFor("score")) throw new Error("ключ ИИ не задан");
 
   const meta = await askJson(
     "Ты помогаешь настроить поиск вакансий. Верни ТОЛЬКО JSON без пояснений.",
@@ -93,7 +94,8 @@ export async function deriveTargetTrack(resume: string, targetRole: string): Pro
   const tag = meta?.tag ? String(meta.tag).slice(0, 40) : undefined;
 
   const transferPrompt = await chat({
-    model: config.letterModel,
+    model: config.scoreModels[0] ?? config.letterModel,
+    role: "score",
     system:
       "Ты карьерный консультант. По резюме кандидата составь карту переноса опыта (transferable skills) " +
       "на язык желаемой роли: переформулируй РЕАЛЬНЫЙ опыт, ничего не выдумывая. Верни только текст карты, 5-8 пунктов.",

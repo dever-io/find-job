@@ -1,10 +1,10 @@
 import { config } from "../config.js";
-import { chatUrl, modelsUrl, resolveBase } from "../providers.js";
+import { chatUrlFor, modelsUrlFor, endpointFor, type Role } from "../providers.js";
 import https from "node:https";
 
 // Клиент любого OpenAI-совместимого провайдера (OpenRouter/OpenAI/DeepSeek/Groq/…).
-// URL и ключ берутся из config/providers, поэтому смена провайдера в /admin работает
-// без правок кода. Имя файла историческое.
+// URL и ключ берутся из config/providers по роли задачи, поэтому у скоринга и писем
+// могут быть разные провайдеры. Имя файла историческое.
 
 export interface ChatOptions {
   model: string;
@@ -12,6 +12,8 @@ export interface ChatOptions {
   user: string;
   temperature?: number;
   maxTokens?: number;
+  /** Задача: определяет провайдера+ключ (см. providers.endpointFor). */
+  role?: Role;
   /** false → явно отключить «размышления» reasoning-моделей (qwen3, gpt-oss…),
    *  иначе они тратят весь бюджет токенов на thinking и возвращают пустой content. */
   reasoningEnabled?: boolean;
@@ -19,16 +21,17 @@ export interface ChatOptions {
 
 type Headers = Record<string, string>;
 
-function authHeaders(): Headers {
+function authHeaders(role?: Role): Headers {
+  const ep = endpointFor(role);
   const h: Headers = {
-    Authorization: `Bearer ${config.aiKey}`,
+    Authorization: `Bearer ${ep.key}`,
     "Content-Type": "application/json",
     // OpenRouter просит указывать источник трафика (прочие провайдеры игнорируют):
     "HTTP-Referer": config.appUrl,
     "X-Title": config.appTitle,
   };
   // Anthropic compat-эндпоинт требует версию API (Bearer он принимает).
-  if (resolveBase().includes("api.anthropic.com")) h["anthropic-version"] = "2023-06-01";
+  if (ep.base.includes("api.anthropic.com")) h["anthropic-version"] = "2023-06-01";
   return h;
 }
 
@@ -98,9 +101,9 @@ function request(
     : reqDirect(method, url, headers, body, timeoutMs);
 }
 
-/** Один запрос к Chat Completions выбранного провайдера. Бросает при ошибке/пустом ответе. */
+/** Один запрос к Chat Completions провайдера роли. Бросает при ошибке/пустом ответе. */
 export async function chat(opts: ChatOptions, timeoutMs = 30000): Promise<string> {
-  if (!config.aiKey) throw new Error("ключ ИИ не задан");
+  if (!endpointFor(opts.role).key) throw new Error("ключ ИИ не задан");
   const body = JSON.stringify({
     model: opts.model,
     temperature: opts.temperature ?? 0.2,
@@ -111,19 +114,19 @@ export async function chat(opts: ChatOptions, timeoutMs = 30000): Promise<string
       { role: "user", content: opts.user },
     ],
   });
-  const data = await request("POST", chatUrl(), authHeaders(), body, timeoutMs);
+  const data = await request("POST", chatUrlFor(opts.role), authHeaders(opts.role), body, timeoutMs);
   const content = data?.choices?.[0]?.message?.content;
   if (typeof content !== "string" || !content.trim()) throw new Error("ИИ: пустой ответ");
   return content;
 }
 
 /**
- * Список доступных моделей провайдера (GET {base}/models, формат OpenAI:
+ * Список доступных моделей провайдера роли (GET {base}/models, формат OpenAI:
  * {data:[{id}]}). Нужен для выбора модели в /admin, чтобы не угадывать слаги.
  */
-export async function listModels(timeoutMs = 20000): Promise<string[]> {
-  if (!config.aiKey) throw new Error("ключ ИИ не задан");
-  const data = await request("GET", modelsUrl(), authHeaders(), undefined, timeoutMs);
+export async function listModels(role?: Role, timeoutMs = 20000): Promise<string[]> {
+  if (!endpointFor(role).key) throw new Error("ключ ИИ не задан");
+  const data = await request("GET", modelsUrlFor(role), authHeaders(role), undefined, timeoutMs);
   const items: any[] = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
   const ids = items
     .map((m) => (typeof m === "string" ? m : m?.id))

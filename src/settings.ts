@@ -19,6 +19,13 @@ const FIELDS: Record<string, FieldMeta> = {
   aiBase: { kind: "string" },
   aiKey: { kind: "string", secret: true },
   aiProxy: { kind: "string" },
+  // Провайдеры по задачам (пусто → как общий).
+  scoreProvider: { kind: "string" },
+  scoreBase: { kind: "string" },
+  scoreKey: { kind: "string", secret: true },
+  letterProvider: { kind: "string" },
+  letterBase: { kind: "string" },
+  letterKey: { kind: "string", secret: true },
   hhScrapeProxy: { kind: "string" },
   scoreThreshold: { kind: "number" },
   letterModel: { kind: "string" },
@@ -32,11 +39,23 @@ export interface TextField {
   hint?: string;
 }
 export const TEXT_FIELDS: TextField[] = [
-  { key: "aiKey", label: "API-ключ", hint: "ключ выбранного провайдера" },
   { key: "aiProxy", label: "SOCKS-прокси для ИИ", hint: "socks5h://127.0.0.1:1080 — или «-», чтобы очистить" },
   { key: "hhScrapeProxy", label: "SOCKS-прокси для hh.ru", hint: "socks5h://127.0.0.1:10800 — или «-», чтобы очистить" },
   { key: "scoreThreshold", label: "Порог совпадения (0–100)", hint: "напр. 60" },
 ];
+
+/** Человекочитаемые названия полей (для подтверждений/подсказок). */
+export const KEY_LABEL: Record<string, string> = {
+  aiKey: "Общий ключ",
+  scoreKey: "Ключ скоринга",
+  letterKey: "Ключ писем",
+  aiBase: "Общий base URL",
+  scoreBase: "base URL скоринга",
+  letterBase: "base URL писем",
+  aiProxy: "SOCKS-прокси ИИ",
+  hhScrapeProxy: "SOCKS-прокси hh.ru",
+  scoreThreshold: "Порог совпадения",
+};
 
 export function isSecret(key: string): boolean {
   return Boolean(FIELDS[key]?.secret);

@@ -25,6 +25,15 @@ export const config = {
   // SOCKS-прокси ТОЛЬКО для запросов к ИИ (обход гео-блокировки, напр. OpenRouter
   // режет РФ-IP). Напр. socks5h://127.0.0.1:1080. Пусто → напрямую.
   aiProxy: env.AI_PROXY ?? env.OPENROUTER_PROXY ?? "",
+
+  // Провайдеры по задачам. Пусто → используется общий (aiProvider/aiKey). Позволяет
+  // назначить свой провайдер+ключ на скоринг и на письма по отдельности.
+  scoreProvider: env.AI_SCORE_PROVIDER ?? "",
+  scoreBase: env.AI_SCORE_BASE ?? "",
+  scoreKey: env.AI_SCORE_KEY ?? "",
+  letterProvider: env.AI_LETTER_PROVIDER ?? "",
+  letterBase: env.AI_LETTER_BASE ?? "",
+  letterKey: env.AI_LETTER_KEY ?? "",
   // Модели для скоринга вакансий: перебор с фолбэком.
   scoreModels: (
     env.OPENROUTER_SCORE_MODELS ??

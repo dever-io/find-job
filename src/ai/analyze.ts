@@ -1,6 +1,7 @@
 import { config } from "../config.js";
 import type { ScoreWeights, TrackConfig, Vacancy, VerifyResult } from "../types.js";
 import { chat } from "./openrouter.js";
+import { keyFor } from "../providers.js";
 
 /** Факторы скоринга — совпадают с ключами ScoreWeights (spec §7). */
 const FACTORS = ["experience", "skills", "salary", "schedule", "industry", "requirements"] as const;
@@ -157,11 +158,12 @@ function summarize(a: Analysis, score: number): string {
 /** Анализ одной вакансии для трека: перебор моделей → взвешенный скор, затем эвристика. */
 export async function analyzeOne(track: TrackConfig, v: Vacancy): Promise<VerifyResult> {
   const models = config.scoreModels;
-  if (config.aiKey && models.length) {
+  if (keyFor("score") && models.length) {
     for (const model of models) {
       try {
         const text = await chat({
           model,
+          role: "score",
           system: SYSTEM,
           user: buildPrompt(track, v),
           maxTokens: 800,
